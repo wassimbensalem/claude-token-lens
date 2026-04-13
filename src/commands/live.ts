@@ -3,6 +3,7 @@ import { render } from 'ink'
 import type { Turn } from '../lib/parser.js'
 import { watchProject } from '../lib/watcher.js'
 import { detectCurrentProjectDir, resolveProjectName } from '../lib/paths.js'
+import { isFirstRun } from '../lib/quota.js'
 import * as path from 'path'
 import Dashboard from '../ui/Dashboard.js'
 
@@ -43,6 +44,13 @@ export async function liveCommand(opts: LiveOptions = {}): Promise<void> {
     console.error('Run from inside a project that has active Claude Code sessions,')
     console.error('or use: claude-token-lens sessions  to see available projects.')
     process.exit(1)
+  }
+
+  if (isFirstRun()) {
+    console.log()
+    console.log('⚠️  No plan configured — quota bar may be inaccurate.')
+    console.log('   Run: claude-token-lens setup   (or press [p] to cycle plans in the dashboard)')
+    console.log()
   }
 
   const { waitUntilExit } = render(

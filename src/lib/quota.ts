@@ -46,6 +46,11 @@ export function getDefaultConfig(): QuotaConfig {
   return { plan: 'max5', limit: PLAN_LIMITS.max5 }
 }
 
+/** Returns true if no config file exists yet (first run). */
+export function isFirstRun(): boolean {
+  return !fs.existsSync(CONFIG_PATH)
+}
+
 /** Filter turns to the last 5 hours (rolling window) */
 export function filterRollingWindow(turns: Turn[]): Turn[] {
   const cutoff = Date.now() - 5 * 60 * 60 * 1000

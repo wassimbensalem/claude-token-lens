@@ -3,6 +3,7 @@ import { Command } from 'commander'
 import { liveCommand } from './commands/live.js'
 import { sessionsCommand } from './commands/sessions.js'
 import { reportCommand } from './commands/report.js'
+import { setupCommand } from './commands/setup.js'
 
 const program = new Command()
 
@@ -36,6 +37,13 @@ program
   .option('-d, --detail', 'Show individual sessions within each project')
   .action((opts) => {
     sessionsCommand(opts)
+  })
+
+program
+  .command('setup')
+  .description('Set your Claude plan so quota bars are accurate')
+  .action(async () => {
+    await setupCommand()
   })
 
 // Default command: live
