@@ -33,7 +33,6 @@ export function sessionsCommand(opts: SessionsOptions = {}): void {
   }
 
   const config = loadConfig() ?? getDefaultConfig()
-  const limit = config.limit
 
   interface ProjectInfo {
     dir: string
@@ -138,20 +137,12 @@ export function sessionsCommand(opts: SessionsOptions = {}): void {
     }
   }
 
-  // Footer: show global quota picture here so users have the real number
-  const globalPct = limit && grandTotalWindow > 0
-    ? Math.min(100, Math.round((grandTotalWindow / limit) * 100))
-    : null
-
   console.log()
-  if (globalPct !== null) {
-    console.log(`Global window usage: ${grandTotalWindow.toLocaleString()} / ${limit!.toLocaleString()} output tokens (~${globalPct}% of ${config.plan.toUpperCase()} est. limit)`)
-  }
-  console.log(`Total projects: ${projects.length}  │  Plan: ${config.plan.toUpperCase()}${limit ? ` (~${(limit / 1000).toFixed(0)}k est.)` : ' (no limit)'}`)
+  console.log(`Total projects: ${projects.length}  │  5h window: ${grandTotalWindow.toLocaleString()} output tokens across all projects`)
+  console.log(`Plan: ${config.plan.toUpperCase()}  │  For actual quota remaining, use /usage inside Claude Code`)
   if (opts.detail) {
     console.log(`Tip: use the full session UUID with: claude-token-lens report --session <uuid>`)
   } else {
     console.log(`Tip: run \`claude-token-lens sessions --detail\` to see individual sessions.`)
-    console.log(`     run \`claude-token-lens status\` for the global quota picture.`)
   }
 }

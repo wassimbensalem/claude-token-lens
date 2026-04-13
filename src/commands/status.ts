@@ -5,18 +5,12 @@ import {
   loadConfig,
   getDefaultConfig,
   sumOutputTokens,
+  sumBillingTokens,
   calcBurnRate,
-  calcETA,
-  formatDuration,
   isFirstRun,
 } from '../lib/quota.js'
 
-function progressBar(pct: number, width = 30): string {
-  const filled = Math.round((pct / 100) * width)
-  return '[' + '█'.repeat(filled) + '░'.repeat(width - filled) + ']'
-}
-
-/** One-line global quota summary across all projects — the `/usage` equivalent. */
+/** Token activity summary across all projects in the last 5 hours. */
 export function statusCommand(): void {
   if (isFirstRun()) {
     console.log()
@@ -25,12 +19,10 @@ export function statusCommand(): void {
   }
 
   const config = loadConfig() ?? getDefaultConfig()
-  const limit = config.limit
-
   const dirs = listProjectDirs()
 
-  // Aggregate output tokens in the 5h rolling window across ALL projects
   let totalWindowOutput = 0
+  let totalWindowBilling = 0
   let activeProjects = 0
   const allWindowedTurns: ReturnType<typeof filterRollingWindow> = []
 
@@ -41,31 +33,28 @@ export function statusCommand(): void {
       const windowed = filterRollingWindow(turns.filter(t => !t.isSidechain))
       if (windowed.length > 0) activeProjects++
       totalWindowOutput += sumOutputTokens(windowed)
+      totalWindowBilling += sumBillingTokens(windowed)
       allWindowedTurns.push(...windowed)
     }
   }
 
-  const pct = limit ? Math.min(100, Math.round((totalWindowOutput / limit) * 100)) : null
   const burnRate = calcBurnRate(allWindowedTurns, 10, t => t.usage.output)
-  const eta = limit ? calcETA(totalWindowOutput, limit, burnRate) : null
 
   console.log()
-  console.log(`claude-token-lens status  ─  plan: ${config.plan.toUpperCase()}${limit ? ` (~${(limit / 1000).toFixed(0)}k est.)` : ''}`)
+  console.log(`claude-token-lens status  ─  plan: ${config.plan.toUpperCase()}`)
   console.log()
-
-  if (limit && pct !== null) {
-    const barColor = pct >= 80 ? '⚠️ ' : pct >= 60 ? '  ' : '  '
-    console.log(`${barColor}${progressBar(pct)}  ${pct}%`)
-    console.log(`   ${totalWindowOutput.toLocaleString()} / ${limit.toLocaleString()} output tokens  (5h rolling window)`)
-    if (burnRate > 0) {
-      console.log(`   Burn: ${burnRate.toLocaleString()} tok/min  │  ETA: ${eta != null && pct >= 40 ? formatDuration(eta) + (eta < 20 ? ' ⚠️  CRITICAL' : '') : 'N/A'}`)
-    }
-  } else {
-    console.log(`   ${totalWindowOutput.toLocaleString()} output tokens in 5h window  (API mode — no limit)`)
+  console.log(`   Output tokens (5h window) : ${totalWindowOutput.toLocaleString()}`)
+  console.log(`   Billing tokens (5h window): ${totalWindowBilling.toLocaleString()}`)
+  if (burnRate > 0) {
+    console.log(`   Burn rate                 : ${burnRate.toLocaleString()} output tok/min`)
   }
-
   console.log()
-  console.log(`   ${dirs.length} project${dirs.length !== 1 ? 's' : ''} found  │  ${activeProjects} active in window`)
-  console.log(`   Run 'claude-token-lens sessions' to see per-project breakdown`)
+  console.log(`   ${activeProjects} of ${dirs.length} projects active in window`)
+  console.log()
+  console.log(`   ⚠️  For your actual quota limit, use /usage inside Claude Code.`)
+  console.log(`   This tool can't reliably compare these numbers to Anthropic's`)
+  console.log(`   internal counters — the rate-limit formula is not published.`)
+  console.log()
+  console.log(`   Run 'claude-token-lens sessions' to see per-project breakdown.`)
   console.log()
 }
