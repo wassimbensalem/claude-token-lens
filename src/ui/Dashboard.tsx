@@ -1,0 +1,161 @@
+import React, { useState, useEffect } from 'react'
+import { Box, Text, useInput, useApp } from 'ink'
+import type { Turn } from '../lib/parser.js'
+import { buildAttribution } from '../lib/attributor.js'
+import {
+  filterRollingWindow,
+  calcBurnRate,
+  calcETA,
+  calcWindowReset,
+  formatDuration,
+  loadConfig,
+  saveConfig,
+  getDefaultConfig,
+  PLAN_LIMITS,
+  type Plan,
+  type QuotaConfig,
+} from '../lib/quota.js'
+
+const VERSION = '0.1.0'
+const PLAN_CYCLE: Plan[] = ['pro', 'max5', 'max20', 'api']
+
+function progressBar(pct: number, width = 30): string {
+  const filled = Math.round((pct / 100) * width)
+  return '█'.repeat(filled) + '░'.repeat(width - filled)
+}
+
+interface Props {
+  turns: Turn[]
+  projectName: string
+}
+
+export default function Dashboard({ turns, projectName }: Props) {
+  const { exit } = useApp()
+  const [config, setConfig] = useState<QuotaConfig>(loadConfig() ?? getDefaultConfig())
+
+  useInput((input) => {
+    if (input === 'q' || input === 'Q') exit()
+    if (input === 'p' || input === 'P') {
+      const idx = PLAN_CYCLE.indexOf(config.plan)
+      const next = PLAN_CYCLE[(idx + 1) % PLAN_CYCLE.length]!
+      const newConfig: QuotaConfig = { plan: next, limit: PLAN_LIMITS[next] }
+      saveConfig(newConfig)
+      setConfig(newConfig)
+    }
+  })
+
+  const windowed = filterRollingWindow(turns.filter(t => !t.isSidechain))
+  const sidechainTurns = turns.filter(t => t.isSidechain)
+  const allAttributed = [...windowed, ...sidechainTurns]
+
+  const totalTokens = allAttributed.reduce((s, t) => s + t.usage.total, 0)
+  const limit = config.limit
+  const pct = limit ? Math.min(100, Math.round((totalTokens / limit) * 100)) : 0
+  const burnRate = calcBurnRate(windowed)
+  const eta = limit ? calcETA(totalTokens, limit, burnRate) : null
+  const resetIn = calcWindowReset(windowed)
+
+  const attribution = buildAttribution(allAttributed)
+  const sessionStart = windowed.length > 0
+    ? windowed[0]!.timestamp
+    : null
+  const sessionAge = sessionStart
+    ? Math.round((Date.now() - sessionStart.getTime()) / 60000)
+    : 0
+
+  // Color for progress
+  const barColor = pct >= 80 ? 'red' : pct >= 60 ? 'yellow' : 'green'
+
+  return (
+    <Box flexDirection="column" paddingX={1}>
+      {/* Header */}
+      <Box justifyContent="space-between" marginBottom={1}>
+        <Text bold color="cyan">claude-token-lens</Text>
+        <Text dimColor>v{VERSION}  plan: {config.plan.toUpperCase()}{limit ? ` (${(limit / 1000).toFixed(0)}k)` : ''}</Text>
+      </Box>
+
+      {/* Progress bar */}
+      {limit ? (
+        <Box flexDirection="column" marginBottom={1}>
+          <Box>
+            <Text dimColor>Window  </Text>
+            <Text color={barColor}>{progressBar(pct)}</Text>
+            <Text>  </Text>
+            <Text bold color={barColor}>{pct}%</Text>
+            <Text dimColor>  {totalTokens.toLocaleString()} / {limit.toLocaleString()}</Text>
+          </Box>
+          <Box marginTop={0}>
+            <Text dimColor>
+              {resetIn != null ? `Resets in ${formatDuration(resetIn)}` : 'No data'}
+              {'  │  '}
+              {`Burn ${burnRate.toLocaleString()} tok/min`}
+              {'  │  '}
+              {eta != null ? `ETA ~${formatDuration(eta)}${eta < 20 ? ' ⚠️' : ''}` : 'ETA: N/A'}
+            </Text>
+          </Box>
+        </Box>
+      ) : (
+        <Box marginBottom={1}>
+          <Text dimColor>API mode — no quota limit  │  {totalTokens.toLocaleString()} tokens this session</Text>
+        </Box>
+      )}
+
+      {/* Divider */}
+      <Text dimColor>{'─'.repeat(60)}</Text>
+
+      {/* Attribution table header */}
+      <Box marginTop={0}>
+        <Text dimColor bold>{'Source'.padEnd(38)}</Text>
+        <Text dimColor bold>{'Tokens'.padStart(8)}</Text>
+        <Text dimColor bold>{'%'.padStart(7)}</Text>
+        <Text dimColor bold>{'tok/min'.padStart(10)}</Text>
+      </Box>
+      <Text dimColor>{'─'.repeat(60)}</Text>
+
+      {/* Attribution rows */}
+      {attribution.length === 0 ? (
+        <Text dimColor>  No data yet — waiting for Claude Code activity...</Text>
+      ) : (
+        attribution.slice(0, 10).map((a, i) => {
+          const rowPct = totalTokens > 0 ? Math.round((a.tokens / totalTokens) * 100) : 0
+          const rowRate = calcBurnRate(
+            allAttributed.filter(t => t.label === a.label)
+          )
+          const labelColor = a.label.startsWith('agent:') ? 'magenta'
+            : a.label.startsWith('mcp:') ? 'yellow'
+            : a.label.startsWith('skill:') ? 'cyan'
+            : a.label.startsWith('tool:') ? 'white'
+            : 'gray'
+          return (
+            <Box key={i}>
+              <Text color={labelColor}>{a.label.slice(0, 37).padEnd(38)}</Text>
+              <Text>{a.tokens.toLocaleString().padStart(8)}</Text>
+              <Text dimColor>{`${rowPct}%`.padStart(7)}</Text>
+              <Text dimColor>{rowRate > 0 ? rowRate.toLocaleString().padStart(9) : '        '}</Text>
+            </Box>
+          )
+        })
+      )}
+
+      {/* Divider */}
+      <Text dimColor>{'─'.repeat(60)}</Text>
+
+      {/* Session info */}
+      <Box justifyContent="space-between" marginTop={0}>
+        <Text dimColor>
+          {projectName
+            ? `Project: ${projectName.slice(0, 20)}`
+            : 'Project: unknown'}
+          {'  │  '}
+          {`${windowed.length} turns`}
+          {sessionAge > 0 ? `  │  started ${formatDuration(sessionAge)} ago` : ''}
+        </Text>
+      </Box>
+
+      {/* Controls */}
+      <Box marginTop={1}>
+        <Text dimColor>[q] quit   [p] cycle plan ({PLAN_CYCLE.join(' → ')})</Text>
+      </Box>
+    </Box>
+  )
+}

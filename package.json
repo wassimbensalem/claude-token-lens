@@ -1,0 +1,47 @@
+{
+  "name": "claude-token-lens",
+  "version": "0.1.0",
+  "description": "See exactly what's burning your Claude Code quota — live. Per-tool, per-agent, per-skill attribution with real-time burn rate.",
+  "type": "module",
+  "bin": {
+    "claude-token-lens": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "lint": "tsc --noEmit"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "token",
+    "usage",
+    "monitoring",
+    "anthropic",
+    "ai",
+    "cli"
+  ],
+  "author": "wassimbensalem",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wassimbensalem/claude-token-lens"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "chokidar": "^3.6.0",
+    "cli-table3": "^0.6.5",
+    "commander": "^12.1.0",
+    "ink": "^5.0.1",
+    "react": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.1",
+    "typescript": "^5.5.0"
+  }
+}
