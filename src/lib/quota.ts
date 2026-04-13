@@ -10,10 +10,11 @@ export interface QuotaConfig {
   limit: number | null
 }
 
-// Output-token limits per 5-hour rolling window (what Anthropic rate-limits on).
-// Anthropic enforces limits based on OUTPUT tokens, not total/input tokens.
-// These are best-effort estimates — adjust via ~/.claude-token-lens.json if you
-// observe your actual cutoff differs.
+// COMMUNITY-ESTIMATED output-token limits per 5-hour rolling window.
+// ⚠️  Anthropic does NOT publish exact quota numbers — these are reverse-engineered
+// by the community and are subject to change without notice.
+// Anthropic has been known to silently adjust limits based on capacity.
+// Calibrate via ~/.claude-token-lens.json after observing your real cutoff.
 export const PLAN_LIMITS: Record<Plan, number | null> = {
   pro: 44_000,
   max5: 88_000,

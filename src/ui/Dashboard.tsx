@@ -77,7 +77,7 @@ export default function Dashboard({ turns, projectName }: Props) {
       {/* Header */}
       <Box justifyContent="space-between" marginBottom={1}>
         <Text bold color="cyan">claude-token-lens</Text>
-        <Text dimColor>v{VERSION}  plan: {config.plan.toUpperCase()}{limit ? ` (${(limit / 1000).toFixed(0)}k)` : ''}</Text>
+        <Text dimColor>v{VERSION}  plan: {config.plan.toUpperCase()}{limit ? ` (~${(limit / 1000).toFixed(0)}k est.)` : ''}</Text>
       </Box>
 
       {/* Progress bar */}

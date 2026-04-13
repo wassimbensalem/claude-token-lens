@@ -8,9 +8,9 @@ import {
 } from '../lib/quota.js'
 
 const PLAN_DESCRIPTIONS: Record<Plan, string> = {
-  pro:   'Claude Pro         (~44k output tokens / 5h)',
-  max5:  'Claude Max (5×)    (~88k output tokens / 5h)',
-  max20: 'Claude Max (20×)   (~220k output tokens / 5h)',
+  pro:   'Claude Pro         (community est. ~44k out-tok / 5h — unverified)',
+  max5:  'Claude Max (5×)    (community est. ~88k out-tok / 5h — unverified)',
+  max20: 'Claude Max (20×)   (community est. ~220k out-tok / 5h — unverified)',
   api:   'API key            (no quota limit)',
 }
 
@@ -41,6 +41,10 @@ export async function setupCommand(): Promise<void> {
     console.log()
   }
 
+  console.log('⚠️  Anthropic does not publish exact quota numbers.')
+  console.log('   The limits below are community estimates — unverified and subject to change.')
+  console.log('   The quota bar is a rough indicator, not a precise countdown.')
+  console.log()
   console.log('Which Claude Code plan are you on?\n')
   const plans: Plan[] = ['pro', 'max5', 'max20', 'api']
   plans.forEach((p, i) => {
@@ -72,8 +76,9 @@ export async function setupCommand(): Promise<void> {
   // Offer custom limit override for non-API plans
   if (chosen !== 'api') {
     console.log()
-    console.log(`Default limit for ${chosen.toUpperCase()}: ${customLimit?.toLocaleString()} output tokens`)
-    console.log('These are estimates. If you know your exact cutoff, you can override it.')
+    console.log(`Community estimate for ${chosen.toUpperCase()}: ${customLimit?.toLocaleString()} output tokens / 5h`)
+    console.log('Anthropic does not document the exact limit. You can calibrate this by noting')
+    console.log('the output token count when you actually hit rate limiting, then re-running setup.')
     const override = (await ask(rl, 'Custom limit? (press Enter to keep default): ')).trim()
     if (override !== '') {
       const parsed = parseInt(override.replace(/[,_]/g, ''), 10)

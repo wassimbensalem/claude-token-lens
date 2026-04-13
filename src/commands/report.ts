@@ -120,12 +120,12 @@ export function reportCommand(opts: ReportOptions = {}): void {
   if (sessionLabel) {
     console.log(`Session : ${sessionLabel}`)
   }
-  console.log(`Plan    : ${config.plan.toUpperCase()}${limit ? ` (${(limit / 1000).toFixed(0)}k output-token limit)` : ''}`)
+  console.log(`Plan    : ${config.plan.toUpperCase()}${limit ? ` (~${(limit / 1000).toFixed(0)}k est. limit)` : ''}`)
   console.log()
 
   if (limit) {
     const bar = progressBar(pct ?? 0)
-    console.log(`Quota   : ${bar} ${pct}%`)
+    console.log(`Quota~  : ${bar} ${pct}%  (estimated — Anthropic limit not published)`)
     console.log(`         ${quotaTokens.toLocaleString()} / ${limit.toLocaleString()} output tokens used`)
     console.log(`Cost    : ${totalTokens.toLocaleString()} billing-weighted tokens`)
     console.log(`Reset   : ${resetIn != null ? `in ${formatDuration(resetIn)}` : 'no data'}`)
