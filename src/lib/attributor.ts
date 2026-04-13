@@ -35,9 +35,10 @@ export function attributeLabel(content: unknown[]): string {
     return `agent: ${desc.slice(0, 30)}${desc.length > 30 ? '…' : ''}`
   }
 
-  // 3. Skill — stop matching at backtick, space, dash, or em-dash so
-  //    "Skill: `/investigate` — reason" parses as "/investigate" not "/investigate`"
-  const skillMatch = texts.match(/Skill:\s*`?(\/[^\s`—\u2014]+)/)
+  // 3. Skill — require an em-dash or " — " after the skill name so that
+  //    explanatory text ("the regex requires `Skill: /name`") doesn't false-positive.
+  //    Real announcements always follow: "Skill: `/name` — reason" or "Skill: /name — reason"
+  const skillMatch = texts.match(/Skill:\s*`?(\/[^\s`—\u2014]+)[`\s]*(?:—|\u2014| — )/)
   if (skillMatch) {
     return `skill: ${skillMatch[1]}`
   }

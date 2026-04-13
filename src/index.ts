@@ -42,7 +42,7 @@ program
 
 program
   .command('status')
-  .description('Global quota usage across all projects — like /usage in Claude Code')
+  .description('Global token usage across all projects — run /stats in Claude Code for actual quota')
   .action(() => {
     statusCommand()
   })

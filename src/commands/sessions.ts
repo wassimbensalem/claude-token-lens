@@ -120,18 +120,24 @@ export function sessionsCommand(opts: SessionsOptions = {}): void {
       const files = findSessionFiles(p.dir)
       for (const file of files) {
         const turns = parseSessionFile(file)
-        const sessionOutputTokens = sumOutputTokens(turns.filter(t => !t.isSidechain))
+        // Use windowed output tokens so the share column uses the same window
+        // as the project-level share above. Otherwise old sessions (mostly outside
+        // the 5h window) divide their ALL-TIME output by the window total, giving
+        // misleading values like "109% of window".
+        const windowed = filterRollingWindow(turns.filter(t => !t.isSidechain))
+        const sessionWindowOutput = sumOutputTokens(windowed)
         const sessionBillingTokens = turns.reduce((s, t) => s + t.usage.total, 0)
+        const sessionAllTimeOutput = sumOutputTokens(turns.filter(t => !t.isSidechain))
         const sessionAge = fs.statSync(file).mtimeMs
         const stem = path.basename(file, '.jsonl')
         const shortId = stem.slice(0, 8) + '…'
-        // Session share = this session's fraction of all window output tokens
-        const sessionSharePct = grandTotalWindow > 0
-          ? Math.round((sessionOutputTokens / grandTotalWindow) * 100)
+        // Share = this session's windowed output as fraction of total window
+        const sessionSharePct = grandTotalWindow > 0 && sessionWindowOutput > 0
+          ? Math.round((sessionWindowOutput / grandTotalWindow) * 100)
           : null
         const shareStr = sessionSharePct !== null ? ` (${sessionSharePct}% of window)` : ''
         console.log(
-          `  ↳ ${shortId}  ${sessionBillingTokens.toLocaleString().padStart(12)} billing-tok  ${sessionOutputTokens.toLocaleString().padStart(8)} out-tok${shareStr}  ${formatAge(Date.now() - sessionAge).padStart(12)}`
+          `  ↳ ${shortId}  ${sessionBillingTokens.toLocaleString().padStart(12)} billing-tok  ${sessionAllTimeOutput.toLocaleString().padStart(8)} out-tok${shareStr}  ${formatAge(Date.now() - sessionAge).padStart(12)}`
         )
       }
     }
@@ -139,7 +145,7 @@ export function sessionsCommand(opts: SessionsOptions = {}): void {
 
   console.log()
   console.log(`Total projects: ${projects.length}  │  5h window: ${grandTotalWindow.toLocaleString()} output tokens across all projects`)
-  console.log(`Plan: ${config.plan.toUpperCase()}  │  For actual quota remaining, use /usage inside Claude Code`)
+  console.log(`Plan: ${config.plan.toUpperCase()}  │  For actual quota remaining, use /stats inside Claude Code`)
   if (opts.detail) {
     console.log(`Tip: use the full session UUID with: claude-token-lens report --session <uuid>`)
   } else {

@@ -11,10 +11,20 @@ export interface QuotaConfig {
 }
 
 // COMMUNITY-ESTIMATED output-token limits per 5-hour rolling window.
-// ⚠️  Anthropic does NOT publish exact quota numbers — these are reverse-engineered
-// by the community and are subject to change without notice.
-// Anthropic has been known to silently adjust limits based on capacity.
-// Calibrate via ~/.claude-token-lens.json after observing your real cutoff.
+//
+// ⚠️  WARNING: These numbers are UNVERIFIED community estimates — Anthropic has NEVER
+// published exact quota figures. Key facts from research (April 2026):
+//
+//  - Official docs say only "at least 5× usage per session compared to free" for Pro.
+//  - Limits are throttled further during peak hours (5am–11am PT weekdays).
+//  - Weekly limits also exist (added August 2025) — this tool only tracks the 5h window.
+//  - Limits have changed silently at least twice (September 2025, March 2026).
+//  - Quota is shared per organization UUID, not per individual user.
+//  - The formula counts "all tokens processed" — not output-only — but exact weights
+//    for cache reads are undisclosed. These estimates were calibrated on output tokens.
+//
+// Calibrate via ~/.claude-token-lens.json after observing your real rate-limit cutoff.
+// Run /stats inside Claude Code for the authoritative quota view.
 export const PLAN_LIMITS: Record<Plan, number | null> = {
   pro: 44_000,
   max5: 88_000,
@@ -59,11 +69,28 @@ export function filterRollingWindow(turns: Turn[]): Turn[] {
 }
 
 /**
- * Sum the output tokens across turns — this is what Anthropic rate-limits on.
- * Use this for quota percentage and ETA, not the billing-weighted total.
+ * Sum the output tokens across turns.
+ *
+ * Used as a proxy for quota tracking. Note: Anthropic's official docs say quota
+ * counts "all tokens processed" — but the exact formula is undisclosed. The plan
+ * limit estimates (44k/88k/220k) were community-calibrated using output tokens,
+ * so output-only is the best consistent proxy we have.
+ *
+ * For actual quota remaining, users should run /stats inside Claude Code.
  */
 export function sumOutputTokens(turns: Turn[]): number {
   return turns.reduce((s, t) => s + t.usage.output, 0)
+}
+
+/**
+ * Sum the generation tokens (input + cacheCreation + output) across turns.
+ *
+ * This is likely closer to how Anthropic actually measures quota internally
+ * ("all tokens processed"), but the plan limit estimates were calibrated on
+ * output-only numbers, so this can't be used with PLAN_LIMITS directly yet.
+ */
+export function sumGenTokens(turns: Turn[]): number {
+  return turns.reduce((s, t) => s + t.usage.total, 0)
 }
 
 /**

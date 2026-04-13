@@ -42,6 +42,13 @@ export function reportCommand(opts: ReportOptions = {}): void {
     process.exit(1)
   }
 
+  // Validate the project directory exists (explicit --project path could be wrong)
+  if (!fs.existsSync(projectDir)) {
+    console.error(`Project directory not found: ${projectDir}`)
+    console.error('Check the path or run: claude-token-lens sessions  to see available projects.')
+    process.exit(1)
+  }
+
   // If --session given, resolve to a specific .jsonl file
   let sessionLabel: string | null = null
   let turns = parseProject(projectDir)
@@ -103,7 +110,13 @@ export function reportCommand(opts: ReportOptions = {}): void {
   const totalInput = allAttributed.reduce((s, t) => s + t.usage.input, 0)
   const totalCacheRead = allAttributed.reduce((s, t) => s + t.usage.cacheRead, 0)
   const totalCacheCreation = allAttributed.reduce((s, t) => s + t.usage.cacheCreation, 0)
-  const cacheReadBillingCost = Math.round(totalCacheRead * 0.1)
+  // Use (billingTokens - generationTokens) for cacheReadBillingCost rather than
+  // Math.round(totalCacheRead * 0.1) — this keeps the input-overhead section
+  // numerically consistent with the cost line above, which derives cacheReadCost
+  // the same way. The difference is that billingTokens = sum(per-turn billingTotal)
+  // where billingTotal already applied Math.round per turn; rounding the aggregate
+  // instead gives a slightly different number (off by ~1 token per 10 turns).
+  const cacheReadBillingCost = billingTokens - generationTokens
   const cacheReadPctOfBilling = billingTokens > 0
     ? Math.round((cacheReadBillingCost / billingTokens) * 100)
     : 0
@@ -200,14 +213,14 @@ export function reportCommand(opts: ReportOptions = {}): void {
     'Source'.padEnd(38) +
     'Tokens'.padStart(10) +
     '%'.padStart(7) +
-    'tok/min'.padStart(10)
+    'out/min'.padStart(10)
   )
   console.log(`${'─'.repeat(60)}`)
 
   const slice = attribution.slice(0, topN)
   for (const a of slice) {
     const rowPct = generationTokens > 0 ? Math.round((a.tokens / generationTokens) * 100) : 0
-    const rowRate = calcBurnRate(allAttributed.filter(t => t.label === a.label))
+    const rowRate = calcBurnRate(allAttributed.filter(t => t.label === a.label), 10, t => t.usage.output)
     console.log(
       a.label.slice(0, 37).padEnd(38) +
       a.tokens.toLocaleString().padStart(10) +
@@ -286,6 +299,11 @@ export function reportCommand(opts: ReportOptions = {}): void {
     console.log(`  Rising CacheRead across turns    → session aging; /compact will reset this`)
   }
 
+  console.log()
+  console.log(`⚠  This report tracks the 5h rolling window only.`)
+  console.log(`   Anthropic also enforces weekly limits (since Aug 2025) and`)
+  console.log(`   reduces limits during peak hours (5am–11am PT).`)
+  console.log(`   Run /stats inside Claude Code for the authoritative quota view.`)
   console.log()
 }
 

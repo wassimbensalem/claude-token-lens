@@ -93,7 +93,7 @@ export default function Dashboard({ turns, projectName }: Props) {
             <Text color={barColor}>{progressBar(pct)}</Text>
             <Text>  </Text>
             <Text bold color={barColor}>{pct}%</Text>
-            <Text dimColor>  {quotaTokens.toLocaleString()} out-tok  (est. — use /usage for real limit)</Text>
+            <Text dimColor>  {quotaTokens.toLocaleString()} out-tok  (est. — use /stats for real limit)</Text>
           </Box>
           <Box marginTop={0}>
             <Text dimColor>
@@ -119,7 +119,7 @@ export default function Dashboard({ turns, projectName }: Props) {
         <Text dimColor bold>{'Source'.padEnd(38)}</Text>
         <Text dimColor bold>{'Tokens'.padStart(8)}</Text>
         <Text dimColor bold>{'%'.padStart(7)}</Text>
-        <Text dimColor bold>{'tok/min'.padStart(10)}</Text>
+        <Text dimColor bold>{'out/min'.padStart(10)}</Text>
       </Box>
       <Text dimColor>{'─'.repeat(60)}</Text>
 
@@ -130,7 +130,9 @@ export default function Dashboard({ turns, projectName }: Props) {
         attribution.slice(0, visibleRows).map((a) => {
           const rowPct = generationTokens > 0 ? Math.round((a.tokens / generationTokens) * 100) : 0
           const rowRate = calcBurnRate(
-            allAttributed.filter(t => t.label === a.label)
+            allAttributed.filter(t => t.label === a.label),
+            10,
+            t => t.usage.output
           )
           const labelColor = a.label.startsWith('agent:') ? 'magenta'
             : a.label.startsWith('mcp:') ? 'yellow'
@@ -168,7 +170,7 @@ export default function Dashboard({ turns, projectName }: Props) {
 
       {/* Controls */}
       <Box marginTop={1}>
-        <Text dimColor>[q] quit   [p] cycle plan ({PLAN_CYCLE.join(' → ')})</Text>
+        <Text dimColor>[q] quit   [p] cycle plan ({PLAN_CYCLE.join(' → ')})   ⚠ weekly limits also apply — /stats for actual quota</Text>
       </Box>
     </Box>
   )

@@ -4,7 +4,7 @@
   "description": "See exactly what's burning your Claude Code quota — live. Per-tool, per-agent, per-skill attribution with real-time burn rate.",
   "type": "module",
   "bin": {
-    "claude-token-lens": "./dist/index.js"
+    "claude-token-lens": "dist/index.js"
   },
   "files": [
     "dist/**/*",
@@ -33,7 +33,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/wassimbensalem/claude-token-lens"
+    "url": "git+https://github.com/wassimbensalem/claude-token-lens.git"
   },
   "engines": {
     "node": ">=18"

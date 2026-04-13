@@ -24,10 +24,13 @@ export function statusCommand(): void {
   let totalWindowOutput = 0
   let totalWindowBilling = 0
   let activeProjects = 0
+  let projectsWithSessions = 0
   const allWindowedTurns: ReturnType<typeof filterRollingWindow> = []
 
   for (const dir of dirs) {
     const files = findSessionFiles(dir)
+    if (files.length === 0) continue  // skip empty dirs (no JSONL files)
+    projectsWithSessions++
     for (const file of files) {
       const turns = parseSessionFile(file)
       const windowed = filterRollingWindow(turns.filter(t => !t.isSidechain))
@@ -49,11 +52,13 @@ export function statusCommand(): void {
     console.log(`   Burn rate                 : ${burnRate.toLocaleString()} output tok/min`)
   }
   console.log()
-  console.log(`   ${activeProjects} of ${dirs.length} projects active in window`)
+  console.log(`   ${activeProjects} of ${projectsWithSessions} projects active in window`)
   console.log()
-  console.log(`   ⚠️  For your actual quota limit, use /usage inside Claude Code.`)
+  console.log(`   ⚠️  For your actual quota limit, use /stats inside Claude Code.`)
   console.log(`   This tool can't reliably compare these numbers to Anthropic's`)
   console.log(`   internal counters — the rate-limit formula is not published.`)
+  console.log(`   Note: Anthropic also enforces weekly limits (since Aug 2025)`)
+  console.log(`   and reduces limits further during peak hours (5am–11am PT).`)
   console.log()
   console.log(`   Run 'claude-token-lens sessions' to see per-project breakdown.`)
   console.log()

@@ -95,9 +95,16 @@ describe('attributeLabel — Skill (tier 3)', () => {
     expect(attributeLabel(content)).toBe('skill: /plan')
   })
 
-  it('stops at space: "Skill: /debug something" → "/debug"', () => {
+  it('does NOT match "Skill: /name" without em-dash — prevents false positives from docs/examples', () => {
+    // Real announcements always have "Skill: /name — reason". Text that mentions
+    // skill format without the em-dash (e.g. in documentation) must not be attributed.
     const content = makeContent([{ type: 'text', text: 'Skill: /debug something else' }])
-    expect(attributeLabel(content)).toBe('skill: /debug')
+    expect(attributeLabel(content)).toBe('[direct]')
+  })
+
+  it('does NOT match backtick-wrapped name without em-dash: "`Skill: /name`"', () => {
+    const content = makeContent([{ type: 'text', text: 'the pattern `Skill: /name` must appear verbatim' }])
+    expect(attributeLabel(content)).toBe('[direct]')
   })
 })
 
