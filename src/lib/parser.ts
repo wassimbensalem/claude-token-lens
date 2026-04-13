@@ -26,7 +26,7 @@ function parseUsage(raw: Record<string, number>): TokenUsage {
   const cacheCreation = raw['cache_creation_input_tokens'] ?? 0
   const cacheRead = raw['cache_read_input_tokens'] ?? 0
   const output = raw['output_tokens'] ?? 0
-  return { input, cacheCreation, cacheRead, output, total: input + cacheCreation + output }
+  return { input, cacheCreation, cacheRead, output, total: input + cacheCreation + output + Math.round(cacheRead * 0.1) }
 }
 
 export function parseSessionFile(filePath: string): Turn[] {

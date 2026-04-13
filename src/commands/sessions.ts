@@ -1,22 +1,7 @@
-import { listProjectDirs, findSessionFiles } from '../lib/paths.js'
+import { listProjectDirs, findSessionFiles, resolveProjectName } from '../lib/paths.js'
 import { parseProject } from '../lib/parser.js'
 import { filterRollingWindow } from '../lib/quota.js'
-import * as path from 'path'
 import * as fs from 'fs'
-
-function slugToPath(slug: string): string {
-  return slug.replace(/^-/, '').replace(/-/g, '/') || slug
-}
-
-function formatProjectName(dir: string): string {
-  const slug = path.basename(dir)
-  const p = slugToPath(slug)
-  if (p.startsWith('Users/')) {
-    const parts = p.split('/')
-    return '~/' + parts.slice(2).join('/')
-  }
-  return p
-}
 
 function formatAge(ms: number): string {
   const minutes = Math.round(ms / 60000)
@@ -62,7 +47,7 @@ export function sessionsCommand(): void {
 
     projects.push({
       dir,
-      name: formatProjectName(dir),
+      name: resolveProjectName(dir),
       sessions: files.length,
       totalTokens: allTokens,
       windowTokens,

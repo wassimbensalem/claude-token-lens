@@ -1,4 +1,4 @@
-import { detectCurrentProjectDir, listProjectDirs } from '../lib/paths.js'
+import { detectCurrentProjectDir, resolveProjectName } from '../lib/paths.js'
 import { parseProject } from '../lib/parser.js'
 import { buildAttribution } from '../lib/attributor.js'
 import {
@@ -29,8 +29,7 @@ export function reportCommand(opts: ReportOptions = {}): void {
   } else {
     projectDir = detectCurrentProjectDir()
     if (projectDir) {
-      projectName = path.basename(projectDir)
-        .replace(/^-/, '').replace(/-/g, '/').replace(/^Users\/[^/]+\//, '~/')
+      projectName = resolveProjectName(projectDir)
     }
   }
 

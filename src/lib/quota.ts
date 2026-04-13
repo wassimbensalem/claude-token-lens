@@ -10,6 +10,10 @@ export interface QuotaConfig {
   limit: number | null
 }
 
+// Approximate output-token limits for Claude's 5-hour rolling window.
+// Anthropic tracks output tokens primarily; these values are best-effort estimates.
+// Pro ≈ 44k output tokens, Max5 ≈ 2× Pro, Max20 ≈ 5× Pro.
+// Override via ~/.claude-token-lens.json if you observe different cutoffs.
 export const PLAN_LIMITS: Record<Plan, number | null> = {
   pro: 44_000,
   max5: 88_000,
@@ -55,7 +59,9 @@ export function calcBurnRate(turns: Turn[], windowMinutes = 10): number {
   const recent = turns.filter(t => t.timestamp.getTime() >= cutoff)
   if (recent.length === 0) return 0
   const total = recent.reduce((sum, t) => sum + t.usage.total, 0)
-  return Math.round(total / windowMinutes)
+  const earliest = Math.min(...recent.map(t => t.timestamp.getTime()))
+  const elapsedMinutes = Math.max(1, Math.min(windowMinutes, (Date.now() - earliest) / 60000))
+  return Math.round(total / elapsedMinutes)
 }
 
 /** Estimate minutes until limit at current burn rate. Returns null if no limit or zero rate. */

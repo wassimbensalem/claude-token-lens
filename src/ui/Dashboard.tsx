@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Box, Text, useInput, useApp } from 'ink'
+import { Box, Text, useInput, useApp, useStdout } from 'ink'
 import type { Turn } from '../lib/parser.js'
 import { buildAttribution } from '../lib/attributor.js'
 import {
@@ -31,6 +31,9 @@ interface Props {
 
 export default function Dashboard({ turns, projectName }: Props) {
   const { exit } = useApp()
+  const { stdout } = useStdout()
+  const termHeight = stdout?.rows ?? 24
+  const visibleRows = Math.max(3, termHeight - 13)
   const [config, setConfig] = useState<QuotaConfig>(loadConfig() ?? getDefaultConfig())
 
   useInput((input) => {
@@ -116,7 +119,7 @@ export default function Dashboard({ turns, projectName }: Props) {
       {attribution.length === 0 ? (
         <Text dimColor>  No data yet — waiting for Claude Code activity...</Text>
       ) : (
-        attribution.slice(0, 10).map((a, i) => {
+        attribution.slice(0, visibleRows).map((a) => {
           const rowPct = totalTokens > 0 ? Math.round((a.tokens / totalTokens) * 100) : 0
           const rowRate = calcBurnRate(
             allAttributed.filter(t => t.label === a.label)
@@ -127,7 +130,7 @@ export default function Dashboard({ turns, projectName }: Props) {
             : a.label.startsWith('tool:') ? 'white'
             : 'gray'
           return (
-            <Box key={i}>
+            <Box key={a.label}>
               <Text color={labelColor}>{a.label.slice(0, 37).padEnd(38)}</Text>
               <Text>{a.tokens.toLocaleString().padStart(8)}</Text>
               <Text dimColor>{`${rowPct}%`.padStart(7)}</Text>
@@ -135,6 +138,9 @@ export default function Dashboard({ turns, projectName }: Props) {
             </Box>
           )
         })
+      )}
+      {attribution.length > visibleRows && (
+        <Text dimColor>  +{attribution.length - visibleRows} more sources</Text>
       )}
 
       {/* Divider */}

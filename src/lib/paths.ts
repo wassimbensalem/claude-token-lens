@@ -2,6 +2,36 @@ import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
 
+/** Resolve a human-readable project name from the project directory.
+ *  Prefers reading the real cwd from Claude's project metadata.
+ *  Falls back to slug-based conversion (hyphens are ambiguous with slashes).
+ */
+export function resolveProjectName(projectDir: string): string {
+  // Try to read real path from Claude's project metadata
+  // Claude Code stores cwd in the project's settings file
+  for (const candidate of ['settings.json', '.metadata.json', 'metadata.json']) {
+    const p = path.join(projectDir, candidate)
+    try {
+      if (fs.existsSync(p)) {
+        const data = JSON.parse(fs.readFileSync(p, 'utf8')) as Record<string, unknown>
+        const cwd = data['cwd'] ?? data['projectPath'] ?? data['path']
+        if (typeof cwd === 'string' && cwd.length > 0) {
+          const home = os.homedir()
+          return cwd.startsWith(home) ? '~' + cwd.slice(home.length) : cwd
+        }
+      }
+    } catch { /* continue */ }
+  }
+  // Fallback: slug conversion (hyphens → slashes, ambiguous but best effort)
+  const slug = path.basename(projectDir)
+  const p = slug.replace(/^-/, '').replace(/-/g, '/')
+  if (p.startsWith('Users/')) {
+    const parts = p.split('/')
+    return '~/' + parts.slice(2).join('/')
+  }
+  return p || slug
+}
+
 export function getClaudeProjectsDir(): string {
   if (process.platform === 'win32') {
     const appData = process.env['APPDATA'] ?? path.join(os.homedir(), 'AppData', 'Roaming')

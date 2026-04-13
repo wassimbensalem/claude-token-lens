@@ -2,13 +2,12 @@ import React, { useState, useEffect } from 'react'
 import { render } from 'ink'
 import type { Turn } from '../lib/parser.js'
 import { watchProject } from '../lib/watcher.js'
-import { detectCurrentProjectDir, listProjectDirs } from '../lib/paths.js'
+import { detectCurrentProjectDir, resolveProjectName } from '../lib/paths.js'
 import * as path from 'path'
 import Dashboard from '../ui/Dashboard.js'
 
 interface LiveOptions {
   project?: string
-  all?: boolean
 }
 
 function App({ projectDir, projectName }: { projectDir: string; projectName: string }) {
@@ -35,10 +34,7 @@ export async function liveCommand(opts: LiveOptions = {}): Promise<void> {
   } else {
     projectDir = detectCurrentProjectDir()
     if (projectDir) {
-      projectName = path.basename(projectDir)
-        .replace(/^-/, '')
-        .replace(/-/g, '/')
-        .replace(/^Users\/[^/]+\//, '~/')
+      projectName = resolveProjectName(projectDir)
     }
   }
 
