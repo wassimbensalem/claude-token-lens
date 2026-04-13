@@ -88,11 +88,11 @@ export default function Dashboard({ turns, projectName }: Props) {
       {limit ? (
         <Box flexDirection="column" marginBottom={1}>
           <Box>
-            <Text dimColor>Window  </Text>
+            <Text dimColor>Window~ </Text>
             <Text color={barColor}>{progressBar(pct)}</Text>
             <Text>  </Text>
             <Text bold color={barColor}>{pct}%</Text>
-            <Text dimColor>  {quotaTokens.toLocaleString()} / {limit.toLocaleString()} output tok</Text>
+            <Text dimColor>  {quotaTokens.toLocaleString()} out-tok  (est. — use /usage for real limit)</Text>
           </Box>
           <Box marginTop={0}>
             <Text dimColor>

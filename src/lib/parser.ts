@@ -51,6 +51,39 @@ export function parseSessionFile(filePath: string): Turn[] {
   const lines = content.split('\n').filter(Boolean)
   const turns: Turn[] = []
 
+  // Pass 1: build a map of Agent tool-use IDs → agent label so we can
+  // correctly label sidechain (sub-agent) turns by which agent spawned them,
+  // rather than by what the sub-agent happened to call inside its session.
+  //
+  // Example: CEO spawns lead-engineer via Agent(subagent_type:"lead-engineer").
+  // The spawning turn gets tool_use.id = "toolu_abc". Every sidechain turn
+  // from that sub-agent has toolUseID = "toolu_abc". We use this map to
+  // relabel those turns as "agent: lead-engineer" regardless of their content.
+  const agentCallMap = new Map<string, string>() // tool_use.id → "agent: <type>"
+
+  for (const line of lines) {
+    try {
+      const obj = JSON.parse(line) as Record<string, unknown>
+      const msg = obj['message'] as Record<string, unknown> | undefined
+      if (!msg || msg['role'] !== 'assistant') continue
+      const msgContent = Array.isArray(msg['content']) ? msg['content'] as Record<string, unknown>[] : []
+      for (const item of msgContent) {
+        if (item['type'] !== 'tool_use' || item['name'] !== 'Agent') continue
+        const id = item['id'] as string | undefined
+        if (!id) continue
+        const input = item['input'] as Record<string, unknown> | undefined
+        const subtype = input?.['subagent_type']
+        if (typeof subtype === 'string' && subtype.length > 0) {
+          agentCallMap.set(id, `agent: ${subtype}`)
+        } else {
+          const desc = String(input?.['description'] ?? 'agent')
+          agentCallMap.set(id, `agent: ${desc.slice(0, 30)}${desc.length > 30 ? '…' : ''}`)
+        }
+      }
+    } catch { /* skip malformed lines */ }
+  }
+
+  // Pass 2: parse turns, applying agent lineage labels to sidechain turns
   for (const line of lines) {
     try {
       const obj = JSON.parse(line) as Record<string, unknown>
@@ -60,7 +93,16 @@ export function parseSessionFile(filePath: string): Turn[] {
       if (!msg['usage']) continue
 
       const msgContent = Array.isArray(msg['content']) ? msg['content'] as unknown[] : []
-      const label = attributeLabel(msgContent)
+      const isSidechain = obj['isSidechain'] === true
+      const toolUseID = (obj['toolUseID'] as string | null) ?? null
+
+      // If this is a sidechain turn and we know which agent spawned it,
+      // use the agent label instead of inferring from content.
+      const agentLineageLabel = isSidechain && toolUseID
+        ? agentCallMap.get(toolUseID) ?? null
+        : null
+
+      const label = agentLineageLabel ?? attributeLabel(msgContent)
       const usage = parseUsage(msg['usage'] as Record<string, number>)
 
       turns.push({
@@ -69,9 +111,9 @@ export function parseSessionFile(filePath: string): Turn[] {
         filePath,
         usage,
         label,
-        isSidechain: obj['isSidechain'] === true,
+        isSidechain,
         parentToolUseID: (obj['parentToolUseID'] as string | null) ?? null,
-        toolUseID: (obj['toolUseID'] as string | null) ?? null,
+        toolUseID,
       })
     } catch {
       // skip malformed lines
