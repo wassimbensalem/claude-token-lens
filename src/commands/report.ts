@@ -98,6 +98,31 @@ export function reportCommand(opts: ReportOptions = {}): void {
   const topN = opts.top ?? 20
   const hasDirectBucket = attribution.some(a => a.label === '[direct]')
 
+  // Input overhead analysis
+  const turnCount = allAttributed.length
+  const totalInput = allAttributed.reduce((s, t) => s + t.usage.input, 0)
+  const totalCacheRead = allAttributed.reduce((s, t) => s + t.usage.cacheRead, 0)
+  const totalCacheCreation = allAttributed.reduce((s, t) => s + t.usage.cacheCreation, 0)
+  const cacheReadBillingCost = Math.round(totalCacheRead * 0.1)
+  const cacheReadPctOfBilling = billingTokens > 0
+    ? Math.round((cacheReadBillingCost / billingTokens) * 100)
+    : 0
+  // Total context per turn = input + cacheRead (everything the model actually processed)
+  // "input" alone is near-zero when prompt caching is active — cache carries the context
+  const avgContextPerTurn = turnCount > 0
+    ? Math.round((totalInput + totalCacheRead) / turnCount)
+    : 0
+  const avgNewInputPerTurn = turnCount > 0 ? Math.round(totalInput / turnCount) : 0
+  // Heavy turns = top 5 by total context processed (input + cacheRead)
+  const heavyTurns = [...allAttributed]
+    .sort((a, b) => (b.usage.input + b.usage.cacheRead) - (a.usage.input + a.usage.cacheRead))
+    .slice(0, 5)
+    .filter(t => t.usage.input + t.usage.cacheRead > 0)
+  const heavyThreshold = Math.max(20_000, avgContextPerTurn * 2)
+  const heavyTurnCount = allAttributed.filter(
+    t => t.usage.input + t.usage.cacheRead > heavyThreshold
+  ).length
+
   if (opts.json) {
     const out = {
       project: projectName,
@@ -114,6 +139,24 @@ export function reportCommand(opts: ReportOptions = {}): void {
       etaMinutes: eta,
       windowResetsInMinutes: resetIn,
       attribution: attribution.slice(0, topN),
+      inputAnalysis: {
+        turnCount,
+        avgContextPerTurn,
+        avgNewInputPerTurn,
+        totalCacheCreation,
+        totalCacheRead,
+        cacheReadBillingCost,
+        cacheReadPctOfBilling,
+        heavyTurnCount,
+        heavyThreshold,
+        heaviestTurns: heavyTurns.map(t => ({
+          label: t.label,
+          newInput: t.usage.input,
+          cacheRead: t.usage.cacheRead,
+          output: t.usage.output,
+          timestamp: t.timestamp.toISOString(),
+        })),
+      },
     }
     console.log(JSON.stringify(out, null, 2))
     return
@@ -186,6 +229,63 @@ export function reportCommand(opts: ReportOptions = {}): void {
   if (hasDirectBucket) {
     console.log(`Note: [direct] = assistant text responses with no tool calls or skill annotation`)
   }
+
+  // Input overhead section
+  console.log()
+  console.log(`${'─'.repeat(60)}`)
+  console.log(`Input overhead`)
+  console.log(`${'─'.repeat(60)}`)
+  console.log(
+    `Avg context / turn   : ${avgContextPerTurn.toLocaleString().padStart(10)} tok` +
+    `  (input + cache — everything the model processed)`
+  )
+  console.log(
+    `Avg new input / turn : ${avgNewInputPerTurn.toLocaleString().padStart(10)} tok` +
+    `  (fresh tokens: user messages + uncached tool results)`
+  )
+  console.log(
+    `Cache creation total : ${totalCacheCreation.toLocaleString().padStart(10)} tok` +
+    `  (written to cache, charged once at full price)`
+  )
+  console.log(
+    `Cache read total     : ${totalCacheRead.toLocaleString().padStart(10)} tok` +
+    `  → ${cacheReadBillingCost.toLocaleString()} billing-tok (at 0.1×)`
+  )
+  console.log(
+    `Cache % of cost      : ${String(cacheReadPctOfBilling + '%').padStart(10)}` +
+    `  (grows as session ages — run /compact to reset)`
+  )
+  if (heavyTurnCount > 0) {
+    console.log(
+      `Heavy turns (> ${(heavyThreshold / 1000).toFixed(0)}k ctx): ` +
+      `${heavyTurnCount} of ${turnCount} turns  ← peak bleeding points`
+    )
+  }
+
+  if (heavyTurns.length > 0) {
+    console.log()
+    console.log(`Top 5 turns by total context  (input + cacheRead)`)
+    console.log(
+      'Source'.padEnd(38) +
+      'NewInput'.padStart(10) +
+      'CacheRead'.padStart(12) +
+      'Output'.padStart(10)
+    )
+    for (const t of heavyTurns) {
+      console.log(
+        t.label.slice(0, 37).padEnd(38) +
+        t.usage.input.toLocaleString().padStart(10) +
+        t.usage.cacheRead.toLocaleString().padStart(12) +
+        t.usage.output.toLocaleString().padStart(10)
+      )
+    }
+    console.log()
+    console.log(`What to look for:`)
+    console.log(`  High NewInput on tool:Bash/Read  → large tool output fed into next turn`)
+    console.log(`  High NewInput on [direct]        → CLAUDE.md or hook injecting large context`)
+    console.log(`  Rising CacheRead across turns    → session aging; /compact will reset this`)
+  }
+
   console.log()
 }
 
