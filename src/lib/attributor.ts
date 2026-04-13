@@ -1,3 +1,5 @@
+import type { Turn } from './parser.js'
+
 export function attributeLabel(content: unknown[]): string {
   if (!Array.isArray(content)) return '[direct]'
 
@@ -20,40 +22,48 @@ export function attributeLabel(content: unknown[]): string {
     return `mcp: ${label}`
   }
 
-  // 2. Agent
+  // 2. Agent — use subagent_type as stable label so all calls of the same role
+  //    aggregate into one row rather than splitting by description text
   const agentTool = toolUses.find(t => t.name === 'Agent')
   if (agentTool) {
-    const desc = String(agentTool.input['description'] ?? agentTool.input['subagent_type'] ?? 'agent')
-    return `agent: ${desc.slice(0, 35)}${desc.length > 35 ? '…' : ''}`
+    const subtype = agentTool.input['subagent_type']
+    if (typeof subtype === 'string' && subtype.length > 0) {
+      return `agent: ${subtype}`
+    }
+    // fallback: first 30 chars of description (stable-ish for dedup)
+    const desc = String(agentTool.input['description'] ?? 'agent')
+    return `agent: ${desc.slice(0, 30)}${desc.length > 30 ? '…' : ''}`
   }
 
-  // 3. Skill
-  const skillMatch = texts.match(/Skill:\s*(\/\S+)/)
+  // 3. Skill — stop matching at backtick, space, dash, or em-dash so
+  //    "Skill: `/investigate` — reason" parses as "/investigate" not "/investigate`"
+  const skillMatch = texts.match(/Skill:\s*`?(\/[^\s`—\u2014]+)/)
   if (skillMatch) {
     return `skill: ${skillMatch[1]}`
   }
 
-  // 4. Other tools
+  // 4. Other tools (show up to 2 unique names)
   if (toolUses.length > 0) {
     const names = [...new Set(toolUses.map(t => t.name))].slice(0, 2)
     return `tool: ${names.join(', ')}`
   }
 
-  // 5. Direct
+  // 5. Direct response — no tool calls, no skill annotation
   return '[direct]'
 }
 
 export interface Attribution {
   label: string
+  /** Generation cost: input + cacheCreation + output. Comparable across sources. */
   tokens: number
+  /** Billing-weighted cost including cacheRead×0.1. Aggregate only — not per-source. */
+  billingTokens: number
   input: number
   cacheCreation: number
   cacheRead: number
   output: number
   turnCount: number
 }
-
-import type { Turn } from './parser.js'
 
 export function buildAttribution(turns: Turn[]): Attribution[] {
   const map = new Map<string, Attribution>()
@@ -62,6 +72,7 @@ export function buildAttribution(turns: Turn[]): Attribution[] {
     const existing = map.get(turn.label)
     if (existing) {
       existing.tokens += turn.usage.total
+      existing.billingTokens += turn.usage.billingTotal
       existing.input += turn.usage.input
       existing.cacheCreation += turn.usage.cacheCreation
       existing.cacheRead += turn.usage.cacheRead
@@ -71,6 +82,7 @@ export function buildAttribution(turns: Turn[]): Attribution[] {
       map.set(turn.label, {
         label: turn.label,
         tokens: turn.usage.total,
+        billingTokens: turn.usage.billingTotal,
         input: turn.usage.input,
         cacheCreation: turn.usage.cacheCreation,
         cacheRead: turn.usage.cacheRead,

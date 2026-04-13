@@ -7,7 +7,15 @@ export interface TokenUsage {
   cacheCreation: number
   cacheRead: number
   output: number
+  /** Generation cost: input + cacheCreation + output. Used for per-source attribution. */
   total: number
+  /**
+   * Billing-weighted cost: total + cacheRead × 0.1.
+   * cacheRead is NOT attributed per-source because it reflects the entire accumulated
+   * conversation context being re-read, not the work of a specific tool call.
+   * Use this only for aggregate billing cost display.
+   */
+  billingTotal: number
 }
 
 export interface Turn {
@@ -26,7 +34,8 @@ function parseUsage(raw: Record<string, number>): TokenUsage {
   const cacheCreation = raw['cache_creation_input_tokens'] ?? 0
   const cacheRead = raw['cache_read_input_tokens'] ?? 0
   const output = raw['output_tokens'] ?? 0
-  return { input, cacheCreation, cacheRead, output, total: input + cacheCreation + output + Math.round(cacheRead * 0.1) }
+  const total = input + cacheCreation + output
+  return { input, cacheCreation, cacheRead, output, total, billingTotal: total + Math.round(cacheRead * 0.1) }
 }
 
 export function parseSessionFile(filePath: string): Turn[] {

@@ -13,6 +13,7 @@ import {
   getDefaultConfig,
   PLAN_LIMITS,
   sumOutputTokens,
+  sumBillingTokens,
   type Plan,
   type QuotaConfig,
 } from '../lib/quota.js'
@@ -52,13 +53,16 @@ export default function Dashboard({ turns, projectName }: Props) {
   const sidechainTurns = turns.filter(t => t.isSidechain)
   const allAttributed = [...windowed, ...sidechainTurns]
 
-  const totalTokens = allAttributed.reduce((s, t) => s + t.usage.total, 0)
+  const generationTokens = allAttributed.reduce((s, t) => s + t.usage.total, 0)
   // quotaTokens = output tokens only — what Anthropic rate-limits on
   const quotaTokens = sumOutputTokens(windowed)
   const limit = config.limit
   const pct = limit ? Math.min(100, Math.round((quotaTokens / limit) * 100)) : 0
-  const burnRate = calcBurnRate(windowed)
-  const eta = limit ? calcETA(quotaTokens, limit, burnRate) : null
+  // displayBurnRate: billing-weighted (true cost rate)
+  const displayBurnRate = calcBurnRate(windowed)
+  // quotaBurnRate: output tokens only — same unit as quotaTokens/limit for correct ETA
+  const quotaBurnRate = calcBurnRate(windowed, 10, t => t.usage.output)
+  const eta = limit ? calcETA(quotaTokens, limit, quotaBurnRate) : null
   const resetIn = calcWindowReset(windowed)
 
   const attribution = buildAttribution(allAttributed)
@@ -94,7 +98,7 @@ export default function Dashboard({ turns, projectName }: Props) {
             <Text dimColor>
               {resetIn != null ? `Resets in ${formatDuration(resetIn)}` : 'No data'}
               {'  │  '}
-              {`Burn ${burnRate.toLocaleString()} tok/min`}
+              {`Burn ${displayBurnRate.toLocaleString()} tok/min`}
               {'  │  '}
               {eta != null ? `ETA ~${formatDuration(eta)}${eta < 20 ? ' ⚠️' : ''}` : 'ETA: N/A'}
             </Text>
@@ -102,7 +106,7 @@ export default function Dashboard({ turns, projectName }: Props) {
         </Box>
       ) : (
         <Box marginBottom={1}>
-          <Text dimColor>API mode — no quota limit  │  {sumOutputTokens(windowed).toLocaleString()} output tok  │  {totalTokens.toLocaleString()} billing-weighted</Text>
+          <Text dimColor>API mode — no quota limit  │  {sumOutputTokens(windowed).toLocaleString()} out-tok  │  {sumBillingTokens(allAttributed).toLocaleString()} billing</Text>
         </Box>
       )}
 
@@ -123,7 +127,7 @@ export default function Dashboard({ turns, projectName }: Props) {
         <Text dimColor>  No data yet — waiting for Claude Code activity...</Text>
       ) : (
         attribution.slice(0, visibleRows).map((a) => {
-          const rowPct = totalTokens > 0 ? Math.round((a.tokens / totalTokens) * 100) : 0
+          const rowPct = generationTokens > 0 ? Math.round((a.tokens / generationTokens) * 100) : 0
           const rowRate = calcBurnRate(
             allAttributed.filter(t => t.label === a.label)
           )

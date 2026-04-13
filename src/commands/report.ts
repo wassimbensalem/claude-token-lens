@@ -9,8 +9,8 @@ import {
   formatDuration,
   loadConfig,
   getDefaultConfig,
-  PLAN_LIMITS,
   sumOutputTokens,
+  sumBillingTokens,
   isFirstRun,
 } from '../lib/quota.js'
 import * as path from 'path'
@@ -48,7 +48,6 @@ export function reportCommand(opts: ReportOptions = {}): void {
 
   if (opts.session) {
     const sessionFiles = findSessionFiles(projectDir)
-    // Match by full UUID or unambiguous prefix
     const match = sessionFiles.find(f => {
       const stem = path.basename(f, '.jsonl')
       return stem === opts.session || stem.startsWith(opts.session!)
@@ -59,7 +58,7 @@ export function reportCommand(opts: ReportOptions = {}): void {
       sessionFiles.forEach(f => {
         const stem = path.basename(f, '.jsonl')
         const age = Math.round((Date.now() - fs.statSync(f).mtimeMs) / 60000)
-        const ageStr = age < 60 ? `${age}m ago` : age < 1440 ? `${Math.floor(age/60)}h ago` : `${Math.floor(age/1440)}d ago`
+        const ageStr = age < 60 ? `${age}m ago` : age < 1440 ? `${Math.floor(age / 60)}h ago` : `${Math.floor(age / 1440)}d ago`
         console.error(`  ${stem}  (${ageStr})`)
       })
       process.exit(1)
@@ -67,7 +66,8 @@ export function reportCommand(opts: ReportOptions = {}): void {
     sessionLabel = path.basename(match, '.jsonl')
     turns = parseSessionFile(match)
   }
-  // For single-session mode: no rolling window filter — show all turns in that session
+
+  // For single-session mode: no rolling window filter
   const windowed = sessionLabel
     ? turns.filter(t => !t.isSidechain)
     : filterRollingWindow(turns.filter(t => !t.isSidechain))
@@ -76,16 +76,27 @@ export function reportCommand(opts: ReportOptions = {}): void {
 
   const config = loadConfig() ?? getDefaultConfig()
   const limit = config.limit
-  // totalTokens = billing-weighted cost (shown in attribution table)
-  const totalTokens = allAttributed.reduce((s, t) => s + t.usage.total, 0)
+
   // quotaTokens = output tokens only (what Anthropic rate-limits on)
   const quotaTokens = sumOutputTokens(windowed)
+  // generationTokens = input + cacheCreation + output per source (attribution)
+  const generationTokens = allAttributed.reduce((s, t) => s + t.usage.total, 0)
+  // billingTokens = generation + cacheRead×0.1 (true billing cost, not per-source)
+  const billingTokens = sumBillingTokens(allAttributed)
+  const cacheReadCost = billingTokens - generationTokens
+
   const pct = limit ? Math.min(100, Math.round((quotaTokens / limit) * 100)) : null
-  const burnRate = calcBurnRate(windowed)
-  const eta = limit ? calcETA(quotaTokens, limit, burnRate) : null
+
+  // Burn rate for display: billing-weighted (shows true cost rate)
+  const displayBurnRate = calcBurnRate(windowed)
+  // Burn rate for ETA: output tokens only (same unit as quotaTokens and limit)
+  const quotaBurnRate = calcBurnRate(windowed, 10, t => t.usage.output)
+
+  const eta = limit ? calcETA(quotaTokens, limit, quotaBurnRate) : null
   const resetIn = sessionLabel ? null : calcWindowReset(windowed)
   const attribution = buildAttribution(allAttributed)
   const topN = opts.top ?? 20
+  const hasDirectBucket = attribution.some(a => a.label === '[direct]')
 
   if (opts.json) {
     const out = {
@@ -94,9 +105,12 @@ export function reportCommand(opts: ReportOptions = {}): void {
       plan: config.plan,
       limit,
       quotaTokens,
-      totalBillingTokens: totalTokens,
+      generationTokens,
+      billingTokens,
+      cacheReadCost,
       pct,
-      burnRatePerMin: burnRate,
+      displayBurnRatePerMin: displayBurnRate,
+      quotaBurnRatePerMin: quotaBurnRate,
       etaMinutes: eta,
       windowResetsInMinutes: resetIn,
       attribution: attribution.slice(0, topN),
@@ -125,16 +139,16 @@ export function reportCommand(opts: ReportOptions = {}): void {
 
   if (limit) {
     const bar = progressBar(pct ?? 0)
-    console.log(`Quota~  : ${bar} ${pct}%  (estimated — Anthropic limit not published)`)
-    console.log(`         ${quotaTokens.toLocaleString()} / ${limit.toLocaleString()} output tokens used`)
-    console.log(`Cost    : ${totalTokens.toLocaleString()} billing-weighted tokens`)
+    console.log(`Quota~  : ${bar} ${pct}%  (est. — Anthropic limit not published)`)
+    console.log(`         ${quotaTokens.toLocaleString()} / ${limit.toLocaleString()} output tokens`)
+    console.log(`Cost    : ${generationTokens.toLocaleString()} gen + ${cacheReadCost.toLocaleString()} cache = ${billingTokens.toLocaleString()} billing-tok`)
     console.log(`Reset   : ${resetIn != null ? `in ${formatDuration(resetIn)}` : 'no data'}`)
-    console.log(`Burn    : ${burnRate.toLocaleString()} tok/min`)
+    console.log(`Burn    : ${displayBurnRate.toLocaleString()} billing-tok/min`)
     console.log(`ETA     : ${eta != null ? formatDuration(eta) + (eta < 20 ? ' ⚠️  CRITICAL' : '') : 'N/A'}`)
   } else {
     console.log(`Output  : ${quotaTokens.toLocaleString()} tokens (API mode — no quota)`)
-    console.log(`Cost    : ${totalTokens.toLocaleString()} billing-weighted tokens`)
-    console.log(`Burn    : ${burnRate.toLocaleString()} tok/min`)
+    console.log(`Cost    : ${generationTokens.toLocaleString()} gen + ${cacheReadCost.toLocaleString()} cache = ${billingTokens.toLocaleString()} billing-tok`)
+    console.log(`Burn    : ${displayBurnRate.toLocaleString()} billing-tok/min`)
   }
 
   console.log()
@@ -149,7 +163,7 @@ export function reportCommand(opts: ReportOptions = {}): void {
 
   const slice = attribution.slice(0, topN)
   for (const a of slice) {
-    const rowPct = totalTokens > 0 ? Math.round((a.tokens / totalTokens) * 100) : 0
+    const rowPct = generationTokens > 0 ? Math.round((a.tokens / generationTokens) * 100) : 0
     const rowRate = calcBurnRate(allAttributed.filter(t => t.label === a.label))
     console.log(
       a.label.slice(0, 37).padEnd(38) +
@@ -168,6 +182,9 @@ export function reportCommand(opts: ReportOptions = {}): void {
     console.log(`${turns.length} turns in session`)
   } else {
     console.log(`${windowed.length} turns in 5h window  │  ${turns.length} total turns`)
+  }
+  if (hasDirectBucket) {
+    console.log(`Note: [direct] = assistant text responses with no tool calls or skill annotation`)
   }
   console.log()
 }

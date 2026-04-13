@@ -66,13 +66,30 @@ export function sumOutputTokens(turns: Turn[]): number {
   return turns.reduce((s, t) => s + t.usage.output, 0)
 }
 
-/** Calculate burn rate in tokens per minute from recent turns */
-export function calcBurnRate(turns: Turn[], windowMinutes = 10): number {
+/**
+ * Sum the billing-weighted tokens (total + cacheRead×0.1) across turns.
+ * Use this for overall cost display, not per-source attribution.
+ */
+export function sumBillingTokens(turns: Turn[]): number {
+  return turns.reduce((s, t) => s + t.usage.billingTotal, 0)
+}
+
+/**
+ * Calculate burn rate in tokens per minute from recent turns.
+ * @param getTokens - selector for which token type to measure.
+ *   Default: billingTotal (billing-weighted, good for cost display).
+ *   Pass `t => t.usage.output` for quota/ETA calculations.
+ */
+export function calcBurnRate(
+  turns: Turn[],
+  windowMinutes = 10,
+  getTokens: (t: Turn) => number = (t) => t.usage.billingTotal
+): number {
   if (turns.length === 0) return 0
   const cutoff = Date.now() - windowMinutes * 60 * 1000
   const recent = turns.filter(t => t.timestamp.getTime() >= cutoff)
   if (recent.length === 0) return 0
-  const total = recent.reduce((sum, t) => sum + t.usage.total, 0)
+  const total = recent.reduce((sum, t) => sum + getTokens(t), 0)
   const earliest = Math.min(...recent.map(t => t.timestamp.getTime()))
   const elapsedMinutes = Math.max(1, Math.min(windowMinutes, (Date.now() - earliest) / 60000))
   return Math.round(total / elapsedMinutes)
