@@ -76,6 +76,12 @@ export function sumBillingTokens(turns: Turn[]): number {
 
 /**
  * Calculate burn rate in tokens per minute from recent turns.
+ *
+ * Returns 0 (no rate) when there is insufficient data:
+ *   - fewer than 2 turns in the window, AND elapsed < 2 minutes
+ *   This avoids the cold-start problem where a single turn 30 seconds ago
+ *   produces an inflated rate like "6,000 tok/min" due to a 1-minute floor.
+ *
  * @param getTokens - selector for which token type to measure.
  *   Default: billingTotal (billing-weighted, good for cost display).
  *   Pass `t => t.usage.output` for quota/ETA calculations.
@@ -89,9 +95,13 @@ export function calcBurnRate(
   const cutoff = Date.now() - windowMinutes * 60 * 1000
   const recent = turns.filter(t => t.timestamp.getTime() >= cutoff)
   if (recent.length === 0) return 0
-  const total = recent.reduce((sum, t) => sum + getTokens(t), 0)
   const earliest = Math.min(...recent.map(t => t.timestamp.getTime()))
-  const elapsedMinutes = Math.max(1, Math.min(windowMinutes, (Date.now() - earliest) / 60000))
+  const naturalElapsed = (Date.now() - earliest) / 60000
+  // Require at least 2 turns OR 2 minutes of natural elapsed time before
+  // reporting a rate — prevents cold-start inflation from a single fresh turn.
+  if (recent.length < 2 && naturalElapsed < 2) return 0
+  const total = recent.reduce((sum, t) => sum + getTokens(t), 0)
+  const elapsedMinutes = Math.max(1, Math.min(windowMinutes, naturalElapsed))
   return Math.round(total / elapsedMinutes)
 }
 

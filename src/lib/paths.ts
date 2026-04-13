@@ -2,34 +2,56 @@ import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
 
+function shortenHome(p: string): string {
+  const home = os.homedir()
+  return p.startsWith(home) ? '~' + p.slice(home.length) : p
+}
+
 /** Resolve a human-readable project name from the project directory.
- *  Prefers reading the real cwd from Claude's project metadata.
- *  Falls back to slug-based conversion (hyphens are ambiguous with slashes).
+ *
+ *  Strategy (in order):
+ *  1. Read `cwd` / `projectPath` / `path` from Claude's metadata files
+ *  2. Scan the first 20 lines of the newest session JSONL for a `cwd` field
+ *     (Claude Code writes cwd into each turn line)
+ *  3. Last resort: slug conversion — hyphens are ambiguous with path separators
+ *     so this will mangle paths like `my-project`, but it's better than nothing.
  */
 export function resolveProjectName(projectDir: string): string {
-  // Try to read real path from Claude's project metadata
-  // Claude Code stores cwd in the project's settings file
+  // 1. Metadata files
   for (const candidate of ['settings.json', '.metadata.json', 'metadata.json']) {
-    const p = path.join(projectDir, candidate)
     try {
+      const p = path.join(projectDir, candidate)
       if (fs.existsSync(p)) {
         const data = JSON.parse(fs.readFileSync(p, 'utf8')) as Record<string, unknown>
         const cwd = data['cwd'] ?? data['projectPath'] ?? data['path']
-        if (typeof cwd === 'string' && cwd.length > 0) {
-          const home = os.homedir()
-          return cwd.startsWith(home) ? '~' + cwd.slice(home.length) : cwd
-        }
+        if (typeof cwd === 'string' && cwd.length > 0) return shortenHome(cwd)
       }
     } catch { /* continue */ }
   }
-  // Fallback: slug conversion (hyphens → slashes, ambiguous but best effort)
-  const slug = path.basename(projectDir)
-  const p = slug.replace(/^-/, '').replace(/-/g, '/')
-  if (p.startsWith('Users/')) {
-    const parts = p.split('/')
-    return '~/' + parts.slice(2).join('/')
+
+  // 2. First 20 lines of newest session file
+  const files = findSessionFiles(projectDir)
+  if (files.length > 0) {
+    try {
+      const lines = fs.readFileSync(files[0]!, 'utf8').split('\n').slice(0, 20)
+      for (const line of lines) {
+        if (!line.trim()) continue
+        try {
+          const obj = JSON.parse(line) as Record<string, unknown>
+          const cwd = obj['cwd']
+          if (typeof cwd === 'string' && cwd.length > 0) return shortenHome(cwd)
+        } catch { /* continue */ }
+      }
+    } catch { /* continue */ }
   }
-  return p || slug
+
+  // 3. Slug fallback (ambiguous — hyphens in dir name look identical to path separators)
+  const slug = path.basename(projectDir)
+  const converted = slug.replace(/^-/, '').replace(/-/g, '/')
+  if (converted.startsWith('Users/')) {
+    return '~/' + converted.split('/').slice(2).join('/')
+  }
+  return converted || slug
 }
 
 export function getClaudeProjectsDir(): string {

@@ -111,6 +111,21 @@ describe('calcBurnRate', () => {
     expect(calcBurnRate(turns)).toBe(0)
   })
 
+  it('returns 0 with a single turn < 2 minutes old (cold-start guard)', () => {
+    // 1 turn from 30 seconds ago — insufficient data, must not inflate
+    const turns = [turnAt(0.5, { output: 5000 })]
+    expect(calcBurnRate(turns, 10, t => t.usage.output)).toBe(0)
+  })
+
+  it('returns a rate with 2+ turns even if both are recent', () => {
+    const turns = [
+      turnAt(0.5, { output: 300 }),
+      turnAt(1, { output: 300 }),
+    ]
+    const rate = calcBurnRate(turns, 10, t => t.usage.output)
+    expect(rate).toBeGreaterThan(0)
+  })
+
   it('calculates billing-weighted rate by default', () => {
     // 1 turn 5 minutes ago with billingTotal = 1000
     // elapsed ≈ 5 min → rate ≈ 200 tok/min

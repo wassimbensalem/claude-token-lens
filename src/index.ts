@@ -4,6 +4,7 @@ import { liveCommand } from './commands/live.js'
 import { sessionsCommand } from './commands/sessions.js'
 import { reportCommand } from './commands/report.js'
 import { setupCommand } from './commands/setup.js'
+import { statusCommand } from './commands/status.js'
 
 const program = new Command()
 
@@ -37,6 +38,13 @@ program
   .option('-d, --detail', 'Show individual sessions within each project')
   .action((opts) => {
     sessionsCommand(opts)
+  })
+
+program
+  .command('status')
+  .description('Global quota usage across all projects — like /usage in Claude Code')
+  .action(() => {
+    statusCommand()
   })
 
 program

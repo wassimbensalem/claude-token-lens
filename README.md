@@ -8,6 +8,25 @@ Real-time token attribution for Claude Code sessions. Shows burn rate, quota pro
 claude-token-lens live
 ```
 
+```
+claude-token-lens                                        v0.1.0  plan: MAX5 (~88k est.)
+
+Window  ████████████░░░░░░░░░░░░░░░░░░  42%  36,960 / 88,000 output tok
+Oldest turn drops in 1h 12m  │  Burn 420 tok/min  │  ETA ~2h 4m ⚠
+
+────────────────────────────────────────────────────────────
+Source                                  Tokens      %   tok/min
+────────────────────────────────────────────────────────────
+[direct]                                48,200    55%       230
+tool: Bash                              22,100    25%       190
+agent: lead-engineer                    12,400    14%
+tool: Read                               4,800     5%
+────────────────────────────────────────────────────────────
+Project: ~/my-project  │  38 turns  │  started 1h 22m ago
+
+[q] quit   [p] cycle plan (pro → max5 → max20 → api)
+```
+
 ---
 
 ## The problem
@@ -94,7 +113,7 @@ The bar tracks **output tokens** (what Anthropic rate-limits on) in the current 
 Oldest turn drops in 1h 12m  │  Burn 420 tok/min  │  ETA ~2h 4m ⚠
 ```
 - **Oldest turn drops in** — the oldest turn in your window was sent X hours ago. When it passes 5 hours old, it falls off and your usage count decreases. This is not a full reset.
-- **Burn** — your average output token rate over the last 10 minutes (billing-weighted). Only meaningful if Claude was active recently.
+- **Burn** — your average output token rate over the last 10 minutes (billing-weighted). Requires at least 2 turns or 2 minutes of activity to show — blank at cold start to avoid misleading spikes.
 - **ETA** — estimated time until you exhaust the current window's quota at the current burn rate. Only shown when you're past 40% usage — below that, the number is too large to be useful. Shows ⚠ when under 20 minutes.
 
 **Keys:** `q` quit · `p` cycle plan (Pro → Max5 → Max20 → API, persisted to disk)
@@ -123,6 +142,29 @@ The cost line separates generation from cache overhead:
 Cost : 14,200 gen + 3,800 cache = 18,000 billing-tok
 ```
 `gen` is what the model actually produced and processed. `cache` is the cost of re-reading the accumulated conversation context on every turn (charged at 10% of the normal input rate by Anthropic). Cache cost is shown separately because it's not attributable to any specific tool — it grows with conversation length, not with what you're doing.
+
+---
+
+### `status` — global quota summary
+
+```
+claude-token-lens status
+```
+
+Aggregates output tokens across **all** your projects in the current 5-hour window — the closest equivalent to `/usage` in Claude Code.
+
+```
+claude-token-lens status  ─  plan: MAX5 (~88k est.)
+
+  [████████░░░░░░░░░░░░░░░░░░░░░░]  28%
+   24,640 / 88,000 output tokens  (5h rolling window)
+   Burn: 380 tok/min  │  ETA: N/A
+
+   4 projects found  │  2 active in window
+   Run 'claude-token-lens sessions' to see per-project breakdown
+```
+
+> Note: Anthropic tracks quota server-side across all activity. This command reads your local session files and sums them — it's an estimate, not the authoritative number.
 
 ---
 
