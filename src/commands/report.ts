@@ -142,9 +142,9 @@ export function reportCommand(opts: ReportOptions = {}): void {
     console.log(`Quota~  : ${bar} ${pct}%  (est. — Anthropic limit not published)`)
     console.log(`         ${quotaTokens.toLocaleString()} / ${limit.toLocaleString()} output tokens`)
     console.log(`Cost    : ${generationTokens.toLocaleString()} gen + ${cacheReadCost.toLocaleString()} cache = ${billingTokens.toLocaleString()} billing-tok`)
-    console.log(`Reset   : ${resetIn != null ? `in ${formatDuration(resetIn)}` : 'no data'}`)
+    console.log(`Reset   : ${resetIn != null ? `oldest turn drops in ${formatDuration(resetIn)}` : 'no data'}`)
     console.log(`Burn    : ${displayBurnRate.toLocaleString()} billing-tok/min`)
-    console.log(`ETA     : ${eta != null ? formatDuration(eta) + (eta < 20 ? ' ⚠️  CRITICAL' : '') : 'N/A'}`)
+    console.log(`ETA     : ${eta != null && (pct ?? 0) >= 40 ? formatDuration(eta) + (eta < 20 ? ' ⚠️  CRITICAL' : '') : 'N/A (< 40% used)'}`)
   } else {
     console.log(`Output  : ${quotaTokens.toLocaleString()} tokens (API mode — no quota)`)
     console.log(`Cost    : ${generationTokens.toLocaleString()} gen + ${cacheReadCost.toLocaleString()} cache = ${billingTokens.toLocaleString()} billing-tok`)

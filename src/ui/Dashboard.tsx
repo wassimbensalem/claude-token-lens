@@ -96,11 +96,11 @@ export default function Dashboard({ turns, projectName }: Props) {
           </Box>
           <Box marginTop={0}>
             <Text dimColor>
-              {resetIn != null ? `Resets in ${formatDuration(resetIn)}` : 'No data'}
+              {resetIn != null ? `Oldest turn drops in ${formatDuration(resetIn)}` : 'No data'}
               {'  │  '}
               {`Burn ${displayBurnRate.toLocaleString()} tok/min`}
               {'  │  '}
-              {eta != null ? `ETA ~${formatDuration(eta)}${eta < 20 ? ' ⚠️' : ''}` : 'ETA: N/A'}
+              {eta != null && pct >= 40 ? `ETA ~${formatDuration(eta)}${eta < 20 ? ' ⚠️' : ''}` : 'ETA: N/A'}
             </Text>
           </Box>
         </Box>
