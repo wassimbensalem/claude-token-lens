@@ -7,14 +7,71 @@ function shortenHome(p: string): string {
   return p.startsWith(home) ? '~' + p.slice(home.length) : p
 }
 
+/**
+ * Reconstruct an absolute path from a Claude project slug by walking the
+ * filesystem. The slug encodes a path as a leading hyphen followed by
+ * path components joined with hyphens — but since directory names can also
+ * contain hyphens, reversing it naively is ambiguous.
+ *
+ * This function resolves the ambiguity greedily: starting from the known
+ * home-directory prefix, it tries the longest hyphen-joined token sequence
+ * that matches an existing directory, then advances past it.
+ *
+ * Example:
+ *   slug  → -Users-wassim-Desktop-Projects-Extra-claude-token-lens
+ *   result → /Users/wassim/Desktop/Projects-Extra/claude-token-lens
+ */
+function slugToAbsPath(slug: string): string | null {
+  const home = os.homedir()
+  // Slug always starts with a leading hyphen; strip it
+  let remaining = slug.replace(/^-/, '')
+
+  // The home directory encodes as e.g. "Users-wassim" on macOS / "home-wassim" on Linux.
+  // Convert home to slug form so we can strip the known prefix.
+  const homeSlug = home.replace(/^\//, '').replace(/\//g, '-')
+  if (!remaining.startsWith(homeSlug)) return null
+
+  remaining = remaining.slice(homeSlug.length)
+  if (remaining.startsWith('-')) remaining = remaining.slice(1)
+  if (!remaining) return home
+
+  const parts = remaining.split('-')
+  let currentPath = home
+  let i = 0
+
+  while (i < parts.length) {
+    // Try longest match first (greedy), shrink if the directory doesn't exist
+    let matched = false
+    for (let len = parts.length - i; len >= 1; len--) {
+      const segment = parts.slice(i, i + len).join('-')
+      const candidate = path.join(currentPath, segment)
+      try {
+        if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
+          currentPath = candidate
+          i += len
+          matched = true
+          break
+        }
+      } catch { /* skip inaccessible paths */ }
+    }
+    if (!matched) {
+      // Remaining segments couldn't be matched — append as-is (best effort)
+      currentPath = path.join(currentPath, parts.slice(i).join('-'))
+      break
+    }
+  }
+
+  return currentPath
+}
+
 /** Resolve a human-readable project name from the project directory.
  *
  *  Strategy (in order):
  *  1. Read `cwd` / `projectPath` / `path` from Claude's metadata files
  *  2. Scan the first 20 lines of the newest session JSONL for a `cwd` field
- *     (Claude Code writes cwd into each turn line)
- *  3. Last resort: slug conversion — hyphens are ambiguous with path separators
- *     so this will mangle paths like `my-project`, but it's better than nothing.
+ *  3. Walk the filesystem to reconstruct the real path from the slug,
+ *     resolving the hyphen ambiguity by checking which directories exist
+ *  4. Last resort: naive slug-to-path conversion (will mangle hyphenated names)
  */
 export function resolveProjectName(projectDir: string): string {
   // 1. Metadata files
@@ -45,8 +102,12 @@ export function resolveProjectName(projectDir: string): string {
     } catch { /* continue */ }
   }
 
-  // 3. Slug fallback (ambiguous — hyphens in dir name look identical to path separators)
+  // 3. Filesystem walk — resolve ambiguous hyphens by checking real dirs
   const slug = path.basename(projectDir)
+  const walked = slugToAbsPath(slug)
+  if (walked) return shortenHome(walked)
+
+  // 4. Naive fallback
   const converted = slug.replace(/^-/, '').replace(/-/g, '/')
   if (converted.startsWith('Users/')) {
     return '~/' + converted.split('/').slice(2).join('/')
