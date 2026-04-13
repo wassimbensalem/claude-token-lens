@@ -10,10 +10,10 @@ export interface QuotaConfig {
   limit: number | null
 }
 
-// Approximate output-token limits for Claude's 5-hour rolling window.
-// Anthropic tracks output tokens primarily; these values are best-effort estimates.
-// Pro ≈ 44k output tokens, Max5 ≈ 2× Pro, Max20 ≈ 5× Pro.
-// Override via ~/.claude-token-lens.json if you observe different cutoffs.
+// Output-token limits per 5-hour rolling window (what Anthropic rate-limits on).
+// Anthropic enforces limits based on OUTPUT tokens, not total/input tokens.
+// These are best-effort estimates — adjust via ~/.claude-token-lens.json if you
+// observe your actual cutoff differs.
 export const PLAN_LIMITS: Record<Plan, number | null> = {
   pro: 44_000,
   max5: 88_000,
@@ -50,6 +50,14 @@ export function getDefaultConfig(): QuotaConfig {
 export function filterRollingWindow(turns: Turn[]): Turn[] {
   const cutoff = Date.now() - 5 * 60 * 60 * 1000
   return turns.filter(t => t.timestamp.getTime() >= cutoff)
+}
+
+/**
+ * Sum the output tokens across turns — this is what Anthropic rate-limits on.
+ * Use this for quota percentage and ETA, not the billing-weighted total.
+ */
+export function sumOutputTokens(turns: Turn[]): number {
+  return turns.reduce((s, t) => s + t.usage.output, 0)
 }
 
 /** Calculate burn rate in tokens per minute from recent turns */

@@ -23,6 +23,7 @@ program
   .command('report')
   .description('One-shot report: token breakdown for the current project')
   .option('-p, --project <path>', 'Path to a specific Claude project directory')
+  .option('-s, --session <id>', 'Restrict to a single session UUID (filename stem)')
   .option('--json', 'Output as JSON')
   .option('--top <n>', 'Show top N sources (default: 20)', (v) => parseInt(v, 10))
   .action((opts) => {
@@ -32,8 +33,9 @@ program
 program
   .command('sessions')
   .description('List all Claude Code projects with their token totals')
-  .action(() => {
-    sessionsCommand()
+  .option('-d, --detail', 'Show individual sessions within each project')
+  .action((opts) => {
+    sessionsCommand(opts)
   })
 
 // Default command: live

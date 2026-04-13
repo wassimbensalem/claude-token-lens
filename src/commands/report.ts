@@ -1,5 +1,5 @@
-import { detectCurrentProjectDir, resolveProjectName } from '../lib/paths.js'
-import { parseProject } from '../lib/parser.js'
+import { detectCurrentProjectDir, resolveProjectName, findSessionFiles } from '../lib/paths.js'
+import { parseProject, parseSessionFile } from '../lib/parser.js'
 import { buildAttribution } from '../lib/attributor.js'
 import {
   filterRollingWindow,
@@ -10,11 +10,14 @@ import {
   loadConfig,
   getDefaultConfig,
   PLAN_LIMITS,
+  sumOutputTokens,
 } from '../lib/quota.js'
 import * as path from 'path'
+import * as fs from 'fs'
 
 interface ReportOptions {
   project?: string
+  session?: string
   json?: boolean
   top?: number
 }
@@ -38,27 +41,59 @@ export function reportCommand(opts: ReportOptions = {}): void {
     process.exit(1)
   }
 
-  const turns = parseProject(projectDir)
-  const windowed = filterRollingWindow(turns.filter(t => !t.isSidechain))
+  // If --session given, resolve to a specific .jsonl file
+  let sessionLabel: string | null = null
+  let turns = parseProject(projectDir)
+
+  if (opts.session) {
+    const sessionFiles = findSessionFiles(projectDir)
+    // Match by full UUID or unambiguous prefix
+    const match = sessionFiles.find(f => {
+      const stem = path.basename(f, '.jsonl')
+      return stem === opts.session || stem.startsWith(opts.session!)
+    })
+    if (!match) {
+      console.error(`Session "${opts.session}" not found in ${projectDir}`)
+      console.error('Available sessions:')
+      sessionFiles.forEach(f => {
+        const stem = path.basename(f, '.jsonl')
+        const age = Math.round((Date.now() - fs.statSync(f).mtimeMs) / 60000)
+        const ageStr = age < 60 ? `${age}m ago` : age < 1440 ? `${Math.floor(age/60)}h ago` : `${Math.floor(age/1440)}d ago`
+        console.error(`  ${stem}  (${ageStr})`)
+      })
+      process.exit(1)
+    }
+    sessionLabel = path.basename(match, '.jsonl')
+    turns = parseSessionFile(match)
+  }
+  // For single-session mode: no rolling window filter — show all turns in that session
+  const windowed = sessionLabel
+    ? turns.filter(t => !t.isSidechain)
+    : filterRollingWindow(turns.filter(t => !t.isSidechain))
   const sidechains = turns.filter(t => t.isSidechain)
   const allAttributed = [...windowed, ...sidechains]
 
   const config = loadConfig() ?? getDefaultConfig()
   const limit = config.limit
+  // totalTokens = billing-weighted cost (shown in attribution table)
   const totalTokens = allAttributed.reduce((s, t) => s + t.usage.total, 0)
-  const pct = limit ? Math.min(100, Math.round((totalTokens / limit) * 100)) : null
+  // quotaTokens = output tokens only (what Anthropic rate-limits on)
+  const quotaTokens = sumOutputTokens(windowed)
+  const pct = limit ? Math.min(100, Math.round((quotaTokens / limit) * 100)) : null
   const burnRate = calcBurnRate(windowed)
-  const eta = limit ? calcETA(totalTokens, limit, burnRate) : null
-  const resetIn = calcWindowReset(windowed)
+  const eta = limit ? calcETA(quotaTokens, limit, burnRate) : null
+  const resetIn = sessionLabel ? null : calcWindowReset(windowed)
   const attribution = buildAttribution(allAttributed)
   const topN = opts.top ?? 20
 
   if (opts.json) {
     const out = {
       project: projectName,
+      ...(sessionLabel ? { session: sessionLabel } : {}),
       plan: config.plan,
       limit,
-      totalTokens,
+      quotaTokens,
+      totalBillingTokens: totalTokens,
       pct,
       burnRatePerMin: burnRate,
       etaMinutes: eta,
@@ -73,18 +108,23 @@ export function reportCommand(opts: ReportOptions = {}): void {
   console.log(`\nclaude-token-lens report`)
   console.log(`${'─'.repeat(60)}`)
   console.log(`Project : ${projectName}`)
-  console.log(`Plan    : ${config.plan.toUpperCase()}${limit ? ` (${(limit / 1000).toFixed(0)}k limit)` : ''}`)
+  if (sessionLabel) {
+    console.log(`Session : ${sessionLabel}`)
+  }
+  console.log(`Plan    : ${config.plan.toUpperCase()}${limit ? ` (${(limit / 1000).toFixed(0)}k output-token limit)` : ''}`)
   console.log()
 
   if (limit) {
     const bar = progressBar(pct ?? 0)
     console.log(`Quota   : ${bar} ${pct}%`)
-    console.log(`         ${totalTokens.toLocaleString()} / ${limit.toLocaleString()} tokens`)
+    console.log(`         ${quotaTokens.toLocaleString()} / ${limit.toLocaleString()} output tokens used`)
+    console.log(`Cost    : ${totalTokens.toLocaleString()} billing-weighted tokens`)
     console.log(`Reset   : ${resetIn != null ? `in ${formatDuration(resetIn)}` : 'no data'}`)
     console.log(`Burn    : ${burnRate.toLocaleString()} tok/min`)
     console.log(`ETA     : ${eta != null ? formatDuration(eta) + (eta < 20 ? ' ⚠️  CRITICAL' : '') : 'N/A'}`)
   } else {
-    console.log(`Tokens  : ${totalTokens.toLocaleString()} (API mode — no quota)`)
+    console.log(`Output  : ${quotaTokens.toLocaleString()} tokens (API mode — no quota)`)
+    console.log(`Cost    : ${totalTokens.toLocaleString()} billing-weighted tokens`)
     console.log(`Burn    : ${burnRate.toLocaleString()} tok/min`)
   }
 
@@ -115,7 +155,11 @@ export function reportCommand(opts: ReportOptions = {}): void {
   }
 
   console.log(`${'─'.repeat(60)}`)
-  console.log(`${windowed.length} turns in 5h window  │  ${turns.length} total turns`)
+  if (sessionLabel) {
+    console.log(`${turns.length} turns in session`)
+  } else {
+    console.log(`${windowed.length} turns in 5h window  │  ${turns.length} total turns`)
+  }
   console.log()
 }
 

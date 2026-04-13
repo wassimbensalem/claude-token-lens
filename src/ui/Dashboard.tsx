@@ -12,6 +12,7 @@ import {
   saveConfig,
   getDefaultConfig,
   PLAN_LIMITS,
+  sumOutputTokens,
   type Plan,
   type QuotaConfig,
 } from '../lib/quota.js'
@@ -52,10 +53,12 @@ export default function Dashboard({ turns, projectName }: Props) {
   const allAttributed = [...windowed, ...sidechainTurns]
 
   const totalTokens = allAttributed.reduce((s, t) => s + t.usage.total, 0)
+  // quotaTokens = output tokens only — what Anthropic rate-limits on
+  const quotaTokens = sumOutputTokens(windowed)
   const limit = config.limit
-  const pct = limit ? Math.min(100, Math.round((totalTokens / limit) * 100)) : 0
+  const pct = limit ? Math.min(100, Math.round((quotaTokens / limit) * 100)) : 0
   const burnRate = calcBurnRate(windowed)
-  const eta = limit ? calcETA(totalTokens, limit, burnRate) : null
+  const eta = limit ? calcETA(quotaTokens, limit, burnRate) : null
   const resetIn = calcWindowReset(windowed)
 
   const attribution = buildAttribution(allAttributed)
@@ -85,7 +88,7 @@ export default function Dashboard({ turns, projectName }: Props) {
             <Text color={barColor}>{progressBar(pct)}</Text>
             <Text>  </Text>
             <Text bold color={barColor}>{pct}%</Text>
-            <Text dimColor>  {totalTokens.toLocaleString()} / {limit.toLocaleString()}</Text>
+            <Text dimColor>  {quotaTokens.toLocaleString()} / {limit.toLocaleString()} output tok</Text>
           </Box>
           <Box marginTop={0}>
             <Text dimColor>
@@ -99,7 +102,7 @@ export default function Dashboard({ turns, projectName }: Props) {
         </Box>
       ) : (
         <Box marginBottom={1}>
-          <Text dimColor>API mode — no quota limit  │  {totalTokens.toLocaleString()} tokens this session</Text>
+          <Text dimColor>API mode — no quota limit  │  {sumOutputTokens(windowed).toLocaleString()} output tok  │  {totalTokens.toLocaleString()} billing-weighted</Text>
         </Box>
       )}
 
