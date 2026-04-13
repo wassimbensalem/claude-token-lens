@@ -35,6 +35,7 @@ export default function Dashboard({ turns, projectName }: Props) {
   const { exit } = useApp()
   const { stdout } = useStdout()
   const termHeight = stdout?.rows ?? 24
+  const termWidth = stdout?.columns ?? 80
   const visibleRows = Math.max(3, termHeight - 13)
   const [config, setConfig] = useState<QuotaConfig>(loadConfig() ?? getDefaultConfig())
 
@@ -98,7 +99,7 @@ export default function Dashboard({ turns, projectName }: Props) {
             <Text dimColor>
               {resetIn != null ? `Oldest turn drops in ${formatDuration(resetIn)}` : 'No data'}
               {'  │  '}
-              {`Burn ${displayBurnRate.toLocaleString()} tok/min`}
+              {quotaBurnRate > 0 ? `Burn ${quotaBurnRate.toLocaleString()} out-tok/min` : 'Burn: no data'}
               {'  │  '}
               {eta != null && pct >= 40 ? `ETA ~${formatDuration(eta)}${eta < 20 ? ' ⚠️' : ''}` : 'ETA: N/A'}
             </Text>
@@ -157,7 +158,7 @@ export default function Dashboard({ turns, projectName }: Props) {
       <Box justifyContent="space-between" marginTop={0}>
         <Text dimColor>
           {projectName
-            ? `Project: ${projectName.slice(0, 20)}`
+            ? `Project: ${projectName.slice(0, Math.max(20, termWidth - 40))}`
             : 'Project: unknown'}
           {'  │  '}
           {`${windowed.length} turns`}
