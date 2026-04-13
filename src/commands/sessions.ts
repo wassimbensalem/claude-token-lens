@@ -78,16 +78,20 @@ export function sessionsCommand(opts: SessionsOptions = {}): void {
   // Sort by most recently active
   projects.sort((a, b) => b.lastActive - a.lastActive)
 
+  // Total window output tokens across all projects — used for share column
+  const grandTotalWindow = projects.reduce((s, p) => s + p.windowTokens, 0)
+
   // Column widths
   const nameWidth = Math.min(50, Math.max(20, ...projects.map(p => p.name.length + 2)))
-  const showQuota = limit !== null
 
   // Header
+  // "Share" = this project's % of total window consumption across all projects.
+  // Much more meaningful than comparing each project to the full plan limit in isolation.
   const header =
     'Project'.padEnd(nameWidth) +
     'Sessions'.padStart(9) +
     'Win out-tok'.padStart(12) +
-    (showQuota ? '  Quota'.padStart(16) : '') +
+    '  Share of window'.padStart(19) +
     'All billing-tok'.padStart(16) +
     'Last active'.padStart(14)
   console.log(header)
@@ -95,16 +99,19 @@ export function sessionsCommand(opts: SessionsOptions = {}): void {
 
   for (const p of projects) {
     const age = p.lastActive > 0 ? formatAge(Date.now() - p.lastActive) : '—'
-    const pct = limit ? Math.min(100, Math.round((p.windowTokens / limit) * 100)) : 0
-    const quotaCol = showQuota
-      ? `  ${quotaBar(pct)} ${String(pct + '%').padStart(4)}`
-      : ''
+    // Share = this project's fraction of ALL window output tokens
+    const sharePct = grandTotalWindow > 0
+      ? Math.round((p.windowTokens / grandTotalWindow) * 100)
+      : 0
+    const shareCol = grandTotalWindow > 0
+      ? `  ${quotaBar(sharePct)} ${String(sharePct + '%').padStart(4)}`
+      : '  ' + '░'.repeat(10) + '   0%'
 
     console.log(
       p.name.slice(0, nameWidth - 2).padEnd(nameWidth) +
       String(p.sessions).padStart(9) +
       p.windowTokens.toLocaleString().padStart(12) +
-      quotaCol +
+      shareCol +
       p.totalTokens.toLocaleString().padStart(16) +
       age.padStart(14)
     )
@@ -119,21 +126,32 @@ export function sessionsCommand(opts: SessionsOptions = {}): void {
         const sessionAge = fs.statSync(file).mtimeMs
         const stem = path.basename(file, '.jsonl')
         const shortId = stem.slice(0, 8) + '…'
-        const sessionPct = limit ? Math.min(100, Math.round((sessionOutputTokens / limit) * 100)) : null
-        const pctStr = sessionPct !== null ? ` (${sessionPct}% quota)` : ''
+        // Session share = this session's fraction of all window output tokens
+        const sessionSharePct = grandTotalWindow > 0
+          ? Math.round((sessionOutputTokens / grandTotalWindow) * 100)
+          : null
+        const shareStr = sessionSharePct !== null ? ` (${sessionSharePct}% of window)` : ''
         console.log(
-          `  ↳ ${shortId}  ${sessionBillingTokens.toLocaleString().padStart(12)} billing-tok  ${sessionOutputTokens.toLocaleString().padStart(8)} out-tok${pctStr}  ${formatAge(Date.now() - sessionAge).padStart(12)}`
+          `  ↳ ${shortId}  ${sessionBillingTokens.toLocaleString().padStart(12)} billing-tok  ${sessionOutputTokens.toLocaleString().padStart(8)} out-tok${shareStr}  ${formatAge(Date.now() - sessionAge).padStart(12)}`
         )
       }
     }
   }
 
+  // Footer: show global quota picture here so users have the real number
+  const globalPct = limit && grandTotalWindow > 0
+    ? Math.min(100, Math.round((grandTotalWindow / limit) * 100))
+    : null
+
   console.log()
-  console.log(`Total projects: ${projects.length}  │  Plan: ${config.plan.toUpperCase()}${limit ? ` (${(limit / 1000).toFixed(0)}k limit)` : ' (no limit)'}`)
+  if (globalPct !== null) {
+    console.log(`Global window usage: ${grandTotalWindow.toLocaleString()} / ${limit!.toLocaleString()} output tokens (~${globalPct}% of ${config.plan.toUpperCase()} est. limit)`)
+  }
+  console.log(`Total projects: ${projects.length}  │  Plan: ${config.plan.toUpperCase()}${limit ? ` (~${(limit / 1000).toFixed(0)}k est.)` : ' (no limit)'}`)
   if (opts.detail) {
     console.log(`Tip: use the full session UUID with: claude-token-lens report --session <uuid>`)
   } else {
     console.log(`Tip: run \`claude-token-lens sessions --detail\` to see individual sessions.`)
-    console.log(`     run \`claude-token-lens live\` from inside a project to watch live.`)
+    console.log(`     run \`claude-token-lens status\` for the global quota picture.`)
   }
 }
