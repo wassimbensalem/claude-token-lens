@@ -128,6 +128,12 @@ export function parseProject(projectDir: string): Turn[] {
     .filter(f => f.endsWith('.jsonl'))
     .map(f => path.join(projectDir, f))
 
+  // NOTE: each file is parsed independently — agentCallMap is built per-file.
+  // This works because Claude Code writes sidechain turns into the SAME .jsonl
+  // as the parent session that spawned the agent. If a future Claude Code version
+  // splits sidechain turns into separate files, agentCallMap lookups will fail
+  // and sidechain turns will fall back to content-based labels (e.g. "tool: Read"
+  // instead of "agent: lead-engineer").
   const allTurns: Turn[] = []
   for (const file of files) {
     allTurns.push(...parseSessionFile(file))

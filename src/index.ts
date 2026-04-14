@@ -25,7 +25,8 @@ program
   .command('report')
   .description('One-shot report: token breakdown for the current project')
   .option('-p, --project <path>', 'Path to a specific Claude project directory')
-  .option('-s, --session <id>', 'Restrict to a single session UUID (filename stem)')
+  .option('-s, --session <id>', 'Restrict to a single session UUID, or "current" for the latest')
+  .option('-w, --watch', 'Re-render on every session change (like live, but text-only)')
   .option('--json', 'Output as JSON')
   .option('--top <n>', 'Show top N sources (default: 20)', (v) => parseInt(v, 10))
   .action((opts) => {

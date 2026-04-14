@@ -18,7 +18,7 @@ import {
   type QuotaConfig,
 } from '../lib/quota.js'
 
-const VERSION = '0.1.1'
+const VERSION = '0.1.2'
 const PLAN_CYCLE: Plan[] = ['pro', 'max5', 'max20', 'api']
 
 function progressBar(pct: number, width = 30): string {
@@ -36,46 +36,64 @@ export default function Dashboard({ turns, projectName }: Props) {
   const { stdout } = useStdout()
   const termHeight = stdout?.rows ?? 24
   const termWidth = stdout?.columns ?? 80
-  const visibleRows = Math.max(3, termHeight - 13)
   const [config, setConfig] = useState<QuotaConfig>(loadConfig() ?? getDefaultConfig())
 
-  useInput((input) => {
-    if (input === 'q' || input === 'Q') exit()
-    if (input === 'p' || input === 'P') {
+  // Session tabs: 0 = all sessions, 1..N = individual sessions (oldest→newest)
+  const sessionIds = [...new Set(turns.map(t => t.sessionId))].filter(Boolean)
+  const [sessionIdx, setSessionIdx] = useState(0)
+
+  // Clamp sessionIdx when sessions list changes (e.g. new session appears)
+  const clampedIdx = Math.min(sessionIdx, sessionIds.length)
+  useEffect(() => {
+    if (clampedIdx !== sessionIdx) setSessionIdx(clampedIdx)
+  }, [clampedIdx, sessionIdx])
+
+  useInput((_input, key) => {
+    if (_input === 'q' || _input === 'Q') exit()
+    if (_input === 'p' || _input === 'P') {
       const idx = PLAN_CYCLE.indexOf(config.plan)
       const next = PLAN_CYCLE[(idx + 1) % PLAN_CYCLE.length]!
       const newConfig: QuotaConfig = { plan: next, limit: PLAN_LIMITS[next] }
       saveConfig(newConfig)
       setConfig(newConfig)
     }
+    if (key.leftArrow) {
+      setSessionIdx(i => Math.max(0, i - 1))
+    }
+    if (key.rightArrow) {
+      setSessionIdx(i => Math.min(sessionIds.length, i + 1))
+    }
   })
 
-  const windowed = filterRollingWindow(turns.filter(t => !t.isSidechain))
-  const sidechainTurns = filterRollingWindow(turns.filter(t => t.isSidechain))
+  // Filter turns to selected session (0 = all)
+  const activeTurns = clampedIdx === 0
+    ? turns
+    : turns.filter(t => t.sessionId === sessionIds[clampedIdx - 1])
+
+  const windowed = filterRollingWindow(activeTurns.filter(t => !t.isSidechain))
+  const sidechainTurns = filterRollingWindow(activeTurns.filter(t => t.isSidechain))
   const allAttributed = [...windowed, ...sidechainTurns]
 
   const generationTokens = allAttributed.reduce((s, t) => s + t.usage.total, 0)
-  // quotaTokens = output tokens only — what Anthropic rate-limits on
   const quotaTokens = sumOutputTokens(windowed)
   const limit = config.limit
   const pct = limit ? Math.min(100, Math.round((quotaTokens / limit) * 100)) : 0
-  // displayBurnRate: billing-weighted (true cost rate)
   const displayBurnRate = calcBurnRate(windowed)
-  // quotaBurnRate: output tokens only — same unit as quotaTokens/limit for correct ETA
   const quotaBurnRate = calcBurnRate(windowed, 10, t => t.usage.output)
   const eta = limit ? calcETA(quotaTokens, limit, quotaBurnRate) : null
   const resetIn = calcWindowReset(windowed)
 
   const attribution = buildAttribution(allAttributed)
-  const sessionStart = windowed.length > 0
-    ? windowed[0]!.timestamp
-    : null
+  const sessionStart = windowed.length > 0 ? windowed[0]!.timestamp : null
   const sessionAge = sessionStart
     ? Math.round((Date.now() - sessionStart.getTime()) / 60000)
     : 0
 
-  // Color for progress
   const barColor = pct >= 80 ? 'red' : pct >= 60 ? 'yellow' : 'green'
+
+  // Reserve rows: header(2) + progress(2) + divider(1) + table-header(2) + divider(1)
+  // + session-tabs(1) + session-info(1) + controls(2) = 13
+  const visibleRows = Math.max(3, termHeight - 14)
 
   return (
     <Box flexDirection="column" paddingX={1}>
@@ -113,6 +131,28 @@ export default function Dashboard({ turns, projectName }: Props) {
 
       {/* Divider */}
       <Text dimColor>{'─'.repeat(60)}</Text>
+
+      {/* Session tabs — only shown when there are multiple sessions */}
+      {sessionIds.length > 1 && (
+        <Box marginBottom={0}>
+          {/* "All" tab */}
+          <Box marginRight={1}>
+            {clampedIdx === 0
+              ? <Text bold color="cyan">[ All ]</Text>
+              : <Text dimColor>  All  </Text>
+            }
+          </Box>
+          {/* Per-session tabs */}
+          {sessionIds.map((id, i) => {
+            const short = id.slice(0, 8)
+            const active = clampedIdx === i + 1
+            return active
+              ? <Box key={id} marginRight={1}><Text bold color="cyan">[{short}]</Text></Box>
+              : <Box key={id} marginRight={1}><Text dimColor> {short} </Text></Box>
+          })}
+          <Text dimColor>  ← → to switch</Text>
+        </Box>
+      )}
 
       {/* Attribution table header */}
       <Box marginTop={0}>
@@ -170,7 +210,11 @@ export default function Dashboard({ turns, projectName }: Props) {
 
       {/* Controls */}
       <Box marginTop={1}>
-        <Text dimColor>[q] quit   [p] cycle plan ({PLAN_CYCLE.join(' → ')})   ⚠ weekly limits also apply — /stats for actual quota</Text>
+        <Text dimColor>
+          [q] quit   [p] cycle plan ({PLAN_CYCLE.join(' → ')})
+          {sessionIds.length > 1 ? '   [←→] switch session' : ''}
+          {'   ⚠ /stats for actual quota'}
+        </Text>
       </Box>
     </Box>
   )

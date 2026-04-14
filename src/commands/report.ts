@@ -1,6 +1,7 @@
 import { detectCurrentProjectDir, resolveProjectName, findSessionFiles } from '../lib/paths.js'
 import { parseProject, parseSessionFile } from '../lib/parser.js'
 import { buildAttribution, truncateLabel } from '../lib/attributor.js'
+import { watchProject } from '../lib/watcher.js'
 import {
   filterRollingWindow,
   calcBurnRate,
@@ -21,6 +22,7 @@ interface ReportOptions {
   session?: string
   json?: boolean
   top?: number
+  watch?: boolean
 }
 
 export function reportCommand(opts: ReportOptions = {}): void {
@@ -49,12 +51,23 @@ export function reportCommand(opts: ReportOptions = {}): void {
     process.exit(1)
   }
 
-  // If --session given, resolve to a specific .jsonl file
+  // If --session given, resolve to a specific .jsonl file.
+  // "current" is a special alias for the most recently modified session.
   let sessionLabel: string | null = null
   let turns = parseProject(projectDir)
 
   if (opts.session) {
     const sessionFiles = findSessionFiles(projectDir)
+
+    // Resolve "current" → most recently modified session (files are sorted mtime desc)
+    if (opts.session === 'current') {
+      if (sessionFiles.length === 0) {
+        console.error('No sessions found in this project.')
+        process.exit(1)
+      }
+      opts.session = path.basename(sessionFiles[0]!, '.jsonl')
+    }
+
     const match = sessionFiles.find(f => {
       const stem = path.basename(f, '.jsonl')
       return stem === opts.session || stem.startsWith(opts.session!)
@@ -308,6 +321,18 @@ export function reportCommand(opts: ReportOptions = {}): void {
   console.log(`   reduces limits during peak hours (5am–11am PT).`)
   console.log(`   Run /stats inside Claude Code for the authoritative quota view.`)
   console.log()
+
+  // --watch: re-render on every .jsonl change
+  if (opts.watch && !sessionLabel) {
+    console.log(`Watching for changes… (Ctrl+C to stop)\n`)
+    watchProject(projectDir!, () => {
+      process.stdout.write('\x1b[2J\x1b[H') // clear screen
+      reportCommand({ ...opts, watch: false })
+      console.log(`\nWatching for changes… (Ctrl+C to stop)`)
+    })
+    // Keep process alive
+    process.stdin.resume()
+  }
 }
 
 function progressBar(pct: number, width = 30): string {
