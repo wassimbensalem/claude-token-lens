@@ -37,11 +37,16 @@ function turnAt(minutesAgo: number, tokens: Partial<{
 }
 
 describe('PLAN_LIMITS', () => {
-  it('has the expected community-estimated values', () => {
-    expect(PLAN_LIMITS.pro).toBe(44_000)
-    expect(PLAN_LIMITS.max5).toBe(88_000)
-    expect(PLAN_LIMITS.max20).toBe(220_000)
+  it('has the expected estimated values (derived from real MAX20 data, April 2026)', () => {
+    expect(PLAN_LIMITS.pro).toBe(33_000)
+    expect(PLAN_LIMITS.max5).toBe(165_000)
+    expect(PLAN_LIMITS.max20).toBe(660_000)
     expect(PLAN_LIMITS.api).toBeNull()
+  })
+
+  it('max5 is 5× pro and max20 is 20× pro', () => {
+    expect(PLAN_LIMITS.max5).toBe((PLAN_LIMITS.pro ?? 0) * 5)
+    expect(PLAN_LIMITS.max20).toBe((PLAN_LIMITS.pro ?? 0) * 20)
   })
 })
 

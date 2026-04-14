@@ -10,10 +10,9 @@ export interface QuotaConfig {
   limit: number | null
 }
 
-// COMMUNITY-ESTIMATED output-token limits per 5-hour rolling window.
+// ESTIMATED output-token limits per 5-hour rolling window.
 //
-// ⚠️  WARNING: These numbers are UNVERIFIED community estimates — Anthropic has NEVER
-// published exact quota figures. Key facts from research (April 2026):
+// ⚠️  WARNING: Anthropic has NEVER published exact quota figures. Key facts (April 2026):
 //
 //  - Official docs say only "at least 5× usage per session compared to free" for Pro.
 //  - Limits are throttled further during peak hours (5am–11am PT weekdays).
@@ -23,12 +22,24 @@ export interface QuotaConfig {
 //  - The formula counts "all tokens processed" — not output-only — but exact weights
 //    for cache reads are undisclosed. These estimates were calibrated on output tokens.
 //
-// Calibrate via ~/.claude-token-lens.json after observing your real rate-limit cutoff.
+// Derivation (April 2026, one real data point):
+//  - A MAX20 user hit 94% session usage (/usage dialog) at 617,781 cross-project
+//    output tokens in the 5h window.
+//  - Real MAX20 limit ≈ 617,781 ÷ 0.94 ≈ 657,000 → rounded to 660,000.
+//  - Max5 and Pro derived from the plan multipliers (5× and 20× Pro):
+//      Pro  = 660,000 ÷ 20 = 33,000
+//      Max5 = 33,000  × 5  = 165,000
+//  - Previous community estimates (44k / 88k / 220k) used wrong 2×/5× multipliers.
+//
+// Calibrate via ~/.claude-token-lens.json after observing your real rate-limit cutoff:
+//   1. Run `claude-token-lens status` when /usage shows ~94–99%
+//   2. Divide output tokens by the /usage percentage (e.g. 617781 ÷ 0.94)
+//   3. Run `claude-token-lens setup` and enter that as your custom limit
 // Run /stats inside Claude Code for the authoritative quota view.
 export const PLAN_LIMITS: Record<Plan, number | null> = {
-  pro: 44_000,
-  max5: 88_000,
-  max20: 220_000,
+  pro:   33_000,
+  max5:  165_000,
+  max20: 660_000,
   api: null,
 }
 
