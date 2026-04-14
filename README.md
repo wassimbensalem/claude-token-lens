@@ -4,28 +4,7 @@
 
 Real-time token attribution for Claude Code sessions. Shows burn rate, quota progress, and a per-source breakdown: by tool, agent, skill, and MCP server.
 
-```
-claude-token-lens live
-```
-
-```
-claude-token-lens                                        v0.1.0  plan: MAX5 (~88k est.)
-
-Window  ████████████░░░░░░░░░░░░░░░░░░  42%  36,960 / 88,000 output tok (est. — use /stats for real limit)
-Oldest turn drops in 1h 12m  │  Burn 420 out-tok/min  │  ETA ~2h 4m ⚠
-
-────────────────────────────────────────────────────────────
-Source                                  Tokens      %   tok/min
-────────────────────────────────────────────────────────────
-[direct]                                48,200    55%       230
-tool: Bash                              22,100    25%       190
-agent: lead-engineer                    12,400    14%
-tool: Read                               4,800     5%
-────────────────────────────────────────────────────────────
-Project: ~/my-project  │  38 turns  │  started 1h 22m ago
-
-[q] quit   [p] cycle plan (pro → max5 → max20 → api)
-```
+![claude-token-lens demo](assets/demo.gif)
 
 ---
 
