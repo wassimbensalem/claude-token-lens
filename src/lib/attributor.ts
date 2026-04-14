@@ -35,9 +35,20 @@ export function attributeLabel(content: unknown[]): string {
     return `agent: ${desc.slice(0, 30)}${desc.length > 30 ? '…' : ''}`
   }
 
-  // 3. Skill — require an em-dash or " — " after the skill name so that
-  //    explanatory text ("the regex requires `Skill: /name`") doesn't false-positive.
-  //    Real announcements always follow: "Skill: `/name` — reason" or "Skill: /name — reason"
+  // 3. Skill tool call — extract name directly from the tool input.
+  //    Takes priority over the text-annotation path below so that a turn with
+  //    both a Skill tool_use AND an announcement text doesn't produce two rows.
+  //    Real input shape: { skill: "gstack-investigate" } or { name: "/investigate" }
+  const skillTool = toolUses.find(t => t.name === 'Skill')
+  if (skillTool) {
+    const name = skillTool.input['skill'] ?? skillTool.input['name'] ?? 'unknown'
+    return `skill: ${String(name)}`
+  }
+
+  // 3b. Skill text annotation — for turns where Claude announces a skill in text
+  //     but doesn't call the Skill tool (e.g. some skill invocation styles).
+  //     Require an em-dash after the skill name to avoid false positives from
+  //     explanatory text like "the regex requires `Skill: /name`".
   const skillMatch = texts.match(/Skill:\s*`?(\/[^\s`—\u2014]+)[`\s]*(?:—|\u2014| — )/)
   if (skillMatch) {
     return `skill: ${skillMatch[1]}`

@@ -79,7 +79,33 @@ describe('attributeLabel — Agent (tier 2)', () => {
   })
 })
 
-describe('attributeLabel — Skill (tier 3)', () => {
+describe('attributeLabel — Skill tool call (tier 3)', () => {
+  it('extracts skill name from Skill tool_use input.skill field', () => {
+    const content = makeContent([{ type: 'tool_use', name: 'Skill', input: { skill: 'gstack-investigate' } }])
+    expect(attributeLabel(content)).toBe('skill: gstack-investigate')
+  })
+
+  it('falls back to input.name if input.skill is absent', () => {
+    const content = makeContent([{ type: 'tool_use', name: 'Skill', input: { name: '/review' } }])
+    expect(attributeLabel(content)).toBe('skill: /review')
+  })
+
+  it('uses "unknown" when both input.skill and input.name are absent', () => {
+    const content = makeContent([{ type: 'tool_use', name: 'Skill', input: {} }])
+    expect(attributeLabel(content)).toBe('skill: unknown')
+  })
+
+  it('Skill tool_use takes priority over text annotation in same turn', () => {
+    // Both present — tool_use wins, prevents double-row
+    const content = makeContent([
+      { type: 'tool_use', name: 'Skill', input: { skill: 'gstack-investigate' } },
+      { type: 'text', text: 'Skill: /investigate — looking into the bug' },
+    ])
+    expect(attributeLabel(content)).toBe('skill: gstack-investigate')
+  })
+})
+
+describe('attributeLabel — Skill text annotation (tier 3b)', () => {
   it('extracts skill name from "Skill: /investigate" annotation', () => {
     const content = makeContent([{ type: 'text', text: 'Skill: /investigate — looking into the bug' }])
     expect(attributeLabel(content)).toBe('skill: /investigate')
@@ -96,8 +122,6 @@ describe('attributeLabel — Skill (tier 3)', () => {
   })
 
   it('does NOT match "Skill: /name" without em-dash — prevents false positives from docs/examples', () => {
-    // Real announcements always have "Skill: /name — reason". Text that mentions
-    // skill format without the em-dash (e.g. in documentation) must not be attributed.
     const content = makeContent([{ type: 'text', text: 'Skill: /debug something else' }])
     expect(attributeLabel(content)).toBe('[direct]')
   })

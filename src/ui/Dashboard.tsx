@@ -18,7 +18,7 @@ import {
   type QuotaConfig,
 } from '../lib/quota.js'
 
-const VERSION = '0.1.2'
+const VERSION = '0.1.3'
 const PLAN_CYCLE: Plan[] = ['pro', 'max5', 'max20', 'api']
 
 function progressBar(pct: number, width = 30): string {
