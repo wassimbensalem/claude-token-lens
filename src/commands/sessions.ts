@@ -1,6 +1,6 @@
 import { listProjectDirs, findSessionFiles, resolveProjectName } from '../lib/paths.js'
 import { parseSessionFile } from '../lib/parser.js'
-import { filterRollingWindow, loadConfig, getDefaultConfig, sumOutputTokens } from '../lib/quota.js'
+import { filterRollingWindow, loadConfig, getDefaultConfig, sumOutputTokens, sumBillingTokens } from '../lib/quota.js'
 import * as path from 'path'
 import * as fs from 'fs'
 
@@ -51,13 +51,13 @@ export function sessionsCommand(opts: SessionsOptions = {}): void {
 
     // Aggregate across all sessions
     // windowTokens = output tokens only (quota-relevant)
-    // allTokens    = billing-weighted total (cost view)
+    // allTokens    = billing-weighted total (cost view: total + cacheRead×0.1)
     let allTokens = 0
     let windowTokens = 0
     for (const file of files) {
       const turns = parseSessionFile(file)
       const windowed = filterRollingWindow(turns.filter(t => !t.isSidechain))
-      allTokens += turns.reduce((s, t) => s + t.usage.total, 0)
+      allTokens += sumBillingTokens(turns)
       windowTokens += sumOutputTokens(windowed)
     }
 
@@ -126,7 +126,7 @@ export function sessionsCommand(opts: SessionsOptions = {}): void {
         // misleading values like "109% of window".
         const windowed = filterRollingWindow(turns.filter(t => !t.isSidechain))
         const sessionWindowOutput = sumOutputTokens(windowed)
-        const sessionBillingTokens = turns.reduce((s, t) => s + t.usage.total, 0)
+        const sessionBillingTokens = sumBillingTokens(turns)
         const sessionAllTimeOutput = sumOutputTokens(turns.filter(t => !t.isSidechain))
         const sessionAge = fs.statSync(file).mtimeMs
         const stem = path.basename(file, '.jsonl')

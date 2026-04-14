@@ -43,10 +43,10 @@ export function attributeLabel(content: unknown[]): string {
     return `skill: ${skillMatch[1]}`
   }
 
-  // 4. Other tools (show up to 2 unique names)
+  // 4. Other tools — in practice content[] always contains exactly one tool_use
+  //    (Claude Code writes one tool call per JSONL line), so this is always a single name.
   if (toolUses.length > 0) {
-    const names = [...new Set(toolUses.map(t => t.name))].slice(0, 2)
-    return `tool: ${names.join(', ')}`
+    return `tool: ${toolUses[0]!.name}`
   }
 
   // 5. Direct response — no tool calls, no skill annotation
@@ -64,6 +64,16 @@ export interface Attribution {
   cacheRead: number
   output: number
   turnCount: number
+}
+
+/** Truncate a label for fixed-width display, keeping the tail (unique part).
+ *  e.g. "mcp: claude_ai_Gitlab/get_merge_request_details" (width=37)
+ *    →  "…_Gitlab/get_merge_request_details"
+ */
+export function truncateLabel(label: string, width: number): string {
+  if (label.length <= width) return label
+  if (width <= 1) return '…'
+  return '…' + label.slice(-(width - 1))
 }
 
 export function buildAttribution(turns: Turn[]): Attribution[] {

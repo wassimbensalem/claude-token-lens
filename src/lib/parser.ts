@@ -25,7 +25,6 @@ export interface Turn {
   usage: TokenUsage
   label: string
   isSidechain: boolean
-  parentToolUseID: string | null
   toolUseID: string | null
 }
 
@@ -112,7 +111,6 @@ export function parseSessionFile(filePath: string): Turn[] {
         usage,
         label,
         isSidechain,
-        parentToolUseID: (obj['parentToolUseID'] as string | null) ?? null,
         toolUseID,
       })
     } catch {

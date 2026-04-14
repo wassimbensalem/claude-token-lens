@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { attributeLabel, buildAttribution } from '../src/lib/attributor.js'
+import { attributeLabel, buildAttribution, truncateLabel } from '../src/lib/attributor.js'
 import type { Turn } from '../src/lib/parser.js'
 
 // Helper: build a minimal content array
@@ -114,22 +114,14 @@ describe('attributeLabel — Tools (tier 4)', () => {
     expect(attributeLabel(content)).toBe('tool: Read')
   })
 
-  it('shows up to 2 unique tool names', () => {
+  it('uses the first tool name (content[] always has exactly one tool_use in real JSONL)', () => {
+    // Claude Code writes one tool call per JSONL line — multi-tool content[] never
+    // occurs in practice, but attributeLabel still picks the first one defensively.
     const content = makeContent([
       { type: 'tool_use', name: 'Read', input: {} },
       { type: 'tool_use', name: 'Grep', input: {} },
-      { type: 'tool_use', name: 'Read', input: {} }, // duplicate — should deduplicate
     ])
-    expect(attributeLabel(content)).toBe('tool: Read, Grep')
-  })
-
-  it('deduplicates repeated calls to the same tool', () => {
-    const content = makeContent([
-      { type: 'tool_use', name: 'Bash', input: {} },
-      { type: 'tool_use', name: 'Bash', input: {} },
-      { type: 'tool_use', name: 'Bash', input: {} },
-    ])
-    expect(attributeLabel(content)).toBe('tool: Bash')
+    expect(attributeLabel(content)).toBe('tool: Read')
   })
 })
 
@@ -198,5 +190,38 @@ describe('buildAttribution', () => {
     // turn1: total=150, billing=150+100=250
     // turn2: total=300, billing=300+200=500
     expect(result[0]!.billingTokens).toBe(750)
+  })
+})
+
+describe('truncateLabel', () => {
+  it('returns label unchanged when it fits within width', () => {
+    expect(truncateLabel('tool: Read', 37)).toBe('tool: Read')
+    expect(truncateLabel('[direct]', 37)).toBe('[direct]')
+  })
+
+  it('returns label unchanged when it is exactly the width', () => {
+    const label = 'a'.repeat(37)
+    expect(truncateLabel(label, 37)).toBe(label)
+  })
+
+  it('truncates long labels with leading ellipsis, keeping the tail', () => {
+    // Tail is the unique part for MCP names like mcp: server/get_merge_request_details
+    const label = 'mcp: claude_ai_Gitlab/get_merge_request_details'
+    const result = truncateLabel(label, 37)
+    expect(result).toHaveLength(37)
+    expect(result.startsWith('…')).toBe(true)
+    expect(result.endsWith('request_details')).toBe(true)
+  })
+
+  it('distinguishes two labels that share a common prefix longer than width', () => {
+    const a = 'mcp: claude_ai_Gitlab/get_merge_request_details'
+    const b = 'mcp: claude_ai_Gitlab/get_merge_request_diff'
+    expect(truncateLabel(a, 37)).not.toBe(truncateLabel(b, 37))
+  })
+
+  it('handles width=1 edge case', () => {
+    const result = truncateLabel('hello', 1)
+    expect(result).toHaveLength(1)
+    expect(result).toBe('…')
   })
 })

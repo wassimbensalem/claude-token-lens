@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Box, Text, useInput, useApp, useStdout } from 'ink'
 import type { Turn } from '../lib/parser.js'
-import { buildAttribution } from '../lib/attributor.js'
+import { buildAttribution, truncateLabel } from '../lib/attributor.js'
 import {
   filterRollingWindow,
   calcBurnRate,
@@ -18,7 +18,7 @@ import {
   type QuotaConfig,
 } from '../lib/quota.js'
 
-const VERSION = '0.1.0'
+const VERSION = '0.1.1'
 const PLAN_CYCLE: Plan[] = ['pro', 'max5', 'max20', 'api']
 
 function progressBar(pct: number, width = 30): string {
@@ -51,7 +51,7 @@ export default function Dashboard({ turns, projectName }: Props) {
   })
 
   const windowed = filterRollingWindow(turns.filter(t => !t.isSidechain))
-  const sidechainTurns = turns.filter(t => t.isSidechain)
+  const sidechainTurns = filterRollingWindow(turns.filter(t => t.isSidechain))
   const allAttributed = [...windowed, ...sidechainTurns]
 
   const generationTokens = allAttributed.reduce((s, t) => s + t.usage.total, 0)
@@ -141,7 +141,7 @@ export default function Dashboard({ turns, projectName }: Props) {
             : 'gray'
           return (
             <Box key={a.label}>
-              <Text color={labelColor}>{a.label.slice(0, 37).padEnd(38)}</Text>
+              <Text color={labelColor}>{truncateLabel(a.label, 37).padEnd(38)}</Text>
               <Text>{a.tokens.toLocaleString().padStart(8)}</Text>
               <Text dimColor>{`${rowPct}%`.padStart(7)}</Text>
               <Text dimColor>{rowRate > 0 ? rowRate.toLocaleString().padStart(9) : '        '}</Text>

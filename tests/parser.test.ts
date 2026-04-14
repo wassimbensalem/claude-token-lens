@@ -179,3 +179,91 @@ describe('parseProject', () => {
     expect(parseProject('/tmp/definitely-missing-dir-ctl')).toEqual([])
   })
 })
+
+describe('agent lineage — two-pass parser', () => {
+  // Pass 1 scans the file for Agent tool_use calls and builds a map:
+  //   tool_use.id → "agent: <subtype>"
+  // Pass 2 labels sidechain turns using that map via toolUseID.
+  // This ensures sub-agent turns show "agent: lead-engineer" rather than
+  // whatever tool the sub-agent happened to call (e.g. "tool: Read").
+
+  function agentSpawnLine(toolUseId: string, subagentType: string) {
+    return {
+      timestamp: new Date().toISOString(),
+      sessionId: 'main-session',
+      isSidechain: false,
+      toolUseID: null,
+      message: {
+        role: 'assistant',
+        content: [{
+          type: 'tool_use',
+          id: toolUseId,
+          name: 'Agent',
+          input: { subagent_type: subagentType, description: 'Do the work' },
+        }],
+        usage: {
+          input_tokens: 100,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+          output_tokens: 50,
+        },
+      },
+    }
+  }
+
+  function sidechainLine(toolUseId: string, innerToolName: string) {
+    return {
+      timestamp: new Date().toISOString(),
+      sessionId: 'sub-session',
+      isSidechain: true,
+      toolUseID: toolUseId,
+      message: {
+        role: 'assistant',
+        content: [{ type: 'tool_use', id: 'inner-id', name: innerToolName, input: {} }],
+        usage: {
+          input_tokens: 10,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+          output_tokens: 20,
+        },
+      },
+    }
+  }
+
+  it('labels sidechain turn by agent type, not by inner tool called', () => {
+    const file = writeTempJsonl([
+      agentSpawnLine('toolu_abc', 'lead-engineer'),
+      sidechainLine('toolu_abc', 'Read'),  // sub-agent called Read internally
+    ])
+    const turns = parseSessionFile(file)
+    // main spawn turn
+    expect(turns[0]!.label).toBe('agent: lead-engineer')
+    // sidechain turn: should be "agent: lead-engineer", NOT "tool: Read"
+    expect(turns[1]!.label).toBe('agent: lead-engineer')
+    expect(turns[1]!.isSidechain).toBe(true)
+  })
+
+  it('falls back to content-based label when toolUseID not in map', () => {
+    // A sidechain whose parent spawn call is not in this file
+    const file = writeTempJsonl([
+      sidechainLine('toolu_unknown', 'Bash'),
+    ])
+    const turns = parseSessionFile(file)
+    // No matching entry in agentCallMap → falls back to content label
+    expect(turns[0]!.label).toBe('tool: Bash')
+  })
+
+  it('handles multiple agents with different subagent_types', () => {
+    const file = writeTempJsonl([
+      agentSpawnLine('toolu_eng', 'lead-engineer'),
+      agentSpawnLine('toolu_qa', 'qa-tester'),
+      sidechainLine('toolu_eng', 'Write'),
+      sidechainLine('toolu_qa', 'Bash'),
+    ])
+    const turns = parseSessionFile(file)
+    expect(turns[0]!.label).toBe('agent: lead-engineer')
+    expect(turns[1]!.label).toBe('agent: qa-tester')
+    expect(turns[2]!.label).toBe('agent: lead-engineer')  // Write → lead-engineer
+    expect(turns[3]!.label).toBe('agent: qa-tester')      // Bash → qa-tester
+  })
+})

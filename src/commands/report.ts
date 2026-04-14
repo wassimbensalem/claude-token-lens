@@ -1,6 +1,6 @@
 import { detectCurrentProjectDir, resolveProjectName, findSessionFiles } from '../lib/paths.js'
 import { parseProject, parseSessionFile } from '../lib/parser.js'
-import { buildAttribution } from '../lib/attributor.js'
+import { buildAttribution, truncateLabel } from '../lib/attributor.js'
 import {
   filterRollingWindow,
   calcBurnRate,
@@ -74,11 +74,14 @@ export function reportCommand(opts: ReportOptions = {}): void {
     turns = parseSessionFile(match)
   }
 
-  // For single-session mode: no rolling window filter
+  // For single-session mode: no rolling window filter on main turns.
+  // Sidechains always get the same window treatment as main turns for consistency.
   const windowed = sessionLabel
     ? turns.filter(t => !t.isSidechain)
     : filterRollingWindow(turns.filter(t => !t.isSidechain))
-  const sidechains = turns.filter(t => t.isSidechain)
+  const sidechains = sessionLabel
+    ? turns.filter(t => t.isSidechain)
+    : filterRollingWindow(turns.filter(t => t.isSidechain))
   const allAttributed = [...windowed, ...sidechains]
 
   const config = loadConfig() ?? getDefaultConfig()
@@ -222,7 +225,7 @@ export function reportCommand(opts: ReportOptions = {}): void {
     const rowPct = generationTokens > 0 ? Math.round((a.tokens / generationTokens) * 100) : 0
     const rowRate = calcBurnRate(allAttributed.filter(t => t.label === a.label), 10, t => t.usage.output)
     console.log(
-      a.label.slice(0, 37).padEnd(38) +
+      truncateLabel(a.label, 37).padEnd(38) +
       a.tokens.toLocaleString().padStart(10) +
       `${rowPct}%`.padStart(7) +
       (rowRate > 0 ? rowRate.toLocaleString().padStart(10) : ''.padStart(10))
@@ -286,7 +289,7 @@ export function reportCommand(opts: ReportOptions = {}): void {
     )
     for (const t of heavyTurns) {
       console.log(
-        t.label.slice(0, 37).padEnd(38) +
+        truncateLabel(t.label, 37).padEnd(38) +
         t.usage.input.toLocaleString().padStart(10) +
         t.usage.cacheRead.toLocaleString().padStart(12) +
         t.usage.output.toLocaleString().padStart(10)

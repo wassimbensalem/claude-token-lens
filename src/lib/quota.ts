@@ -83,17 +83,6 @@ export function sumOutputTokens(turns: Turn[]): number {
 }
 
 /**
- * Sum the generation tokens (input + cacheCreation + output) across turns.
- *
- * This is likely closer to how Anthropic actually measures quota internally
- * ("all tokens processed"), but the plan limit estimates were calibrated on
- * output-only numbers, so this can't be used with PLAN_LIMITS directly yet.
- */
-export function sumGenTokens(turns: Turn[]): number {
-  return turns.reduce((s, t) => s + t.usage.total, 0)
-}
-
-/**
  * Sum the billing-weighted tokens (total + cacheRead×0.1) across turns.
  * Use this for overall cost display, not per-source attribution.
  */
@@ -122,7 +111,7 @@ export function calcBurnRate(
   const cutoff = Date.now() - windowMinutes * 60 * 1000
   const recent = turns.filter(t => t.timestamp.getTime() >= cutoff)
   if (recent.length === 0) return 0
-  const earliest = Math.min(...recent.map(t => t.timestamp.getTime()))
+  const earliest = recent.reduce((min, t) => Math.min(min, t.timestamp.getTime()), Infinity)
   const naturalElapsed = (Date.now() - earliest) / 60000
   // Require at least 2 turns OR 2 minutes of natural elapsed time before
   // reporting a rate — prevents cold-start inflation from a single fresh turn.

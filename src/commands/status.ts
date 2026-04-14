@@ -31,14 +31,16 @@ export function statusCommand(): void {
     const files = findSessionFiles(dir)
     if (files.length === 0) continue  // skip empty dirs (no JSONL files)
     projectsWithSessions++
+    let projectIsActive = false
     for (const file of files) {
       const turns = parseSessionFile(file)
       const windowed = filterRollingWindow(turns.filter(t => !t.isSidechain))
-      if (windowed.length > 0) activeProjects++
+      if (windowed.length > 0) projectIsActive = true
       totalWindowOutput += sumOutputTokens(windowed)
       totalWindowBilling += sumBillingTokens(windowed)
       allWindowedTurns.push(...windowed)
     }
+    if (projectIsActive) activeProjects++
   }
 
   const burnRate = calcBurnRate(allWindowedTurns, 10, t => t.usage.output)
