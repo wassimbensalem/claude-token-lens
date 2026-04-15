@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { Box, Text, useInput, useApp, useStdout } from 'ink'
+import { readFileSync } from 'fs'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
 import type { Turn } from '../lib/parser.js'
 import { buildAttribution, truncateLabel } from '../lib/attributor.js'
 import {
@@ -18,7 +21,8 @@ import {
   type QuotaConfig,
 } from '../lib/quota.js'
 
-const VERSION = '0.1.4'
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const VERSION: string = (JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf-8')) as { version: string }).version
 const PLAN_CYCLE: Plan[] = ['pro', 'max5', 'max20', 'api']
 
 function progressBar(pct: number, width = 30): string {

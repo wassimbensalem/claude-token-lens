@@ -13,24 +13,21 @@ Env PATH "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 
 Sleep 1s
 
-# 1 — version
-Type "claude-token-lens --version"
-Enter
-Sleep 1.5s
-
-# 2 — global status (short output, great hook)
+# 1 — status (global quota, short and punchy)
 Type "claude-token-lens status"
 Enter
 Sleep 5s
 
-# 3 — report top 5 (quota bar + attribution table, no scrolling)
+# 2 — report top 5 (quota bar + attribution table)
 Type "claude-token-lens report --top 5 2>&1 | head -22"
 Enter
 Sleep 6s
 
-# 4 — sessions inventory
-Type "claude-token-lens sessions"
+# 3 — live dashboard (the Ink UI — most visual part)
+Type "claude-token-lens live"
 Enter
-Sleep 4s
+Sleep 5s
+Type "q"
+Sleep 1.5s
 
-Sleep 2s
+Sleep 1s
