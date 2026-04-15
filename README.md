@@ -1,5 +1,9 @@
 # claude-token-lens
 
+[![npm version](https://img.shields.io/npm/v/claude-token-lens)](https://www.npmjs.com/package/claude-token-lens)
+[![npm downloads](https://img.shields.io/npm/dw/claude-token-lens)](https://www.npmjs.com/package/claude-token-lens)
+[![GitHub stars](https://img.shields.io/github/stars/wassimbensalem/claude-token-lens?style=social)](https://github.com/wassimbensalem/claude-token-lens)
+
 > See exactly what's burning your Claude Code quota — **live**.
 
 Real-time token attribution for Claude Code sessions. Shows burn rate, quota progress, and a per-source breakdown: by tool, agent, skill, and MCP server.

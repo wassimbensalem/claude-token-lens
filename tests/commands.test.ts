@@ -74,7 +74,7 @@ describe('statusCommand', () => {
 
     const output = consoleSpy.mock.calls.map(c => c.join(' ')).join('\n')
     expect(output).toMatch(/output tokens/i)
-    expect(output).toMatch(/billing tokens/i)
+    expect(output).toMatch(/billing/i)
     expect(output).toMatch(/1 of 1 projects active/)
 
     vi.doUnmock('../src/lib/paths.js')

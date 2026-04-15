@@ -79,6 +79,12 @@ export function filterRollingWindow(turns: Turn[]): Turn[] {
   return turns.filter(t => t.timestamp.getTime() >= cutoff)
 }
 
+/** Filter turns to the last 7 days (weekly window) */
+export function filterWeeklyWindow(turns: Turn[]): Turn[] {
+  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000
+  return turns.filter(t => t.timestamp.getTime() >= cutoff)
+}
+
 /**
  * Sum the output tokens across turns.
  *
