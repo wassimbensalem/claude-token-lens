@@ -4,6 +4,7 @@ import { buildAttribution, truncateLabel } from '../lib/attributor.js'
 import { watchProject } from '../lib/watcher.js'
 import {
   filterRollingWindow,
+  filterWeeklyWindow,
   calcBurnRate,
   calcETA,
   calcWindowReset,
@@ -23,6 +24,7 @@ interface ReportOptions {
   json?: boolean
   top?: number
   watch?: boolean
+  week?: boolean
 }
 
 export function reportCommand(opts: ReportOptions = {}): void {
@@ -89,13 +91,17 @@ export function reportCommand(opts: ReportOptions = {}): void {
 
   // For single-session mode: no rolling window filter on main turns.
   // Sidechains always get the same window treatment as main turns for consistency.
-  const windowed = sessionLabel
-    ? turns.filter(t => !t.isSidechain)
-    : filterRollingWindow(turns.filter(t => !t.isSidechain))
+  const mainTurns = turns.filter(t => !t.isSidechain)
+  const windowed = sessionLabel ? mainTurns : filterRollingWindow(mainTurns)
   const sidechains = sessionLabel
     ? turns.filter(t => t.isSidechain)
     : filterRollingWindow(turns.filter(t => t.isSidechain))
   const allAttributed = [...windowed, ...sidechains]
+
+  // Weekly window — only meaningful in project mode (not per-session)
+  const weeklyTurns = !sessionLabel ? filterWeeklyWindow(mainTurns) : null
+  const weeklyOutput = weeklyTurns ? sumOutputTokens(weeklyTurns) : null
+  const weeklyBilling = weeklyTurns ? sumBillingTokens(weeklyTurns) : null
 
   const config = loadConfig() ?? getDefaultConfig()
   const limit = config.limit
@@ -221,6 +227,11 @@ export function reportCommand(opts: ReportOptions = {}): void {
     console.log(`Output  : ${quotaTokens.toLocaleString()} tokens (API mode — no quota)`)
     console.log(`Cost    : ${generationTokens.toLocaleString()} gen + ${cacheReadCost.toLocaleString()} cache = ${billingTokens.toLocaleString()} billing-tok`)
     console.log(`Burn    : ${displayBurnRate.toLocaleString()} billing-tok/min`)
+  }
+
+  // Weekly window summary (project mode only)
+  if (weeklyOutput != null && weeklyBilling != null) {
+    console.log(`7-day   : ${weeklyOutput.toLocaleString()} output  │  ${weeklyBilling.toLocaleString()} billing-tok  (weekly limit tracking)`)
   }
 
   console.log()

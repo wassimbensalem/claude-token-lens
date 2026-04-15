@@ -35,6 +35,7 @@ program
   .option('-w, --watch', 'Re-render on every session change (like live, but text-only)')
   .option('--json', 'Output as JSON')
   .option('--top <n>', 'Show top N sources (default: 20)', (v) => parseInt(v, 10))
+  .option('--week', 'Show 7-day window totals alongside the 5h window')
   .action((opts) => {
     reportCommand(opts)
   })

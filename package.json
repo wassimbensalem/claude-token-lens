@@ -1,6 +1,6 @@
 {
   "name": "claude-token-lens",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "See exactly what's burning your Claude Code quota — live. Per-tool, per-agent, per-skill attribution with real-time burn rate.",
   "type": "module",
   "bin": {
