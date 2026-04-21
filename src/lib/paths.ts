@@ -26,9 +26,10 @@ function slugToAbsPath(slug: string): string | null {
   // Slug always starts with a leading hyphen; strip it
   let remaining = slug.replace(/^-/, '')
 
-  // The home directory encodes as e.g. "Users-wassim" on macOS / "home-wassim" on Linux.
-  // Convert home to slug form so we can strip the known prefix.
-  const homeSlug = home.replace(/^\//, '').replace(/\//g, '-')
+  // Normalise home to forward slashes and strip Windows drive letter so that
+  // C:\Users\NAME → Users-NAME (same slug form as macOS /Users/name → Users-name).
+  const normalizedHome = home.replace(/\\/g, '/').replace(/^[A-Za-z]:/, '')
+  const homeSlug = normalizedHome.replace(/^\//, '').replace(/\//g, '-')
   if (!remaining.startsWith(homeSlug)) return null
 
   remaining = remaining.slice(homeSlug.length)
@@ -116,10 +117,9 @@ export function resolveProjectName(projectDir: string): string {
 }
 
 export function getClaudeProjectsDir(): string {
-  if (process.platform === 'win32') {
-    const appData = process.env['APPDATA'] ?? path.join(os.homedir(), 'AppData', 'Roaming')
-    return path.join(appData, 'Claude', 'projects')
-  }
+  // Claude Code is a Node.js CLI and stores sessions in ~/.claude/projects on
+  // all platforms — including Windows (resolves to C:\Users\NAME\.claude\projects).
+  // AppData\Roaming is for native Windows GUI apps (Electron), not Node.js CLIs.
   return path.join(os.homedir(), '.claude', 'projects')
 }
 
@@ -149,9 +149,11 @@ export function getLatestSession(projectDir?: string): string | null {
 export function detectCurrentProjectDir(): string | null {
   const base = getClaudeProjectsDir()
   if (!fs.existsSync(base)) return null
-  // Find project dir matching cwd slug
-  const cwd = process.cwd()
-  const slug = '-' + cwd.replace(/\//g, '-').replace(/\\/g, '-').replace(/^-+/, '')
+  // Normalise cwd to forward slashes and strip Windows drive letter (C: → '')
+  // so that C:\Users\NAME\project → /Users/NAME/project → -Users-NAME-project,
+  // matching the slug format Claude Code writes on all platforms.
+  const cwd = process.cwd().replace(/\\/g, '/').replace(/^[A-Za-z]:/, '')
+  const slug = '-' + cwd.replace(/^\//, '').replace(/\//g, '-')
   const direct = path.join(base, slug)
   if (fs.existsSync(direct)) return direct
   // Fallback: most recently modified project
