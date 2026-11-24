@@ -38,8 +38,8 @@ interface Props {
 export default function Dashboard({ turns, projectName }: Props) {
   const { exit } = useApp()
   const { stdout } = useStdout()
-  const termHeight = stdout?.rows ?? 24
-  const termWidth = stdout?.columns ?? 80
+  const termHeight = Math.max(14, stdout?.rows ?? 24)
+  const termWidth = Math.max(60, stdout?.columns ?? 80)
   const [config, setConfig] = useState<QuotaConfig>(loadConfig() ?? getDefaultConfig())
 
   // Session tabs: 0 = all sessions, 1..N = individual sessions (oldest→newest)

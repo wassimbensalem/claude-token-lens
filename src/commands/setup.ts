@@ -7,10 +7,15 @@ import {
   type QuotaConfig,
 } from '../lib/quota.js'
 
+function fmt(n: number | null): string {
+  if (n === null) return 'no limit'
+  return `~${Math.round(n / 1000)}k out-tok / 5h`
+}
+
 const PLAN_DESCRIPTIONS: Record<Plan, string> = {
-  pro:   'Claude Pro         (community est. ~44k out-tok / 5h — unverified)',
-  max5:  'Claude Max (5×)    (community est. ~88k out-tok / 5h — unverified)',
-  max20: 'Claude Max (20×)   (community est. ~220k out-tok / 5h — unverified)',
+  pro:   `Claude Pro         (community est. ${fmt(PLAN_LIMITS.pro)} — unverified)`,
+  max5:  `Claude Max (5×)    (community est. ${fmt(PLAN_LIMITS.max5)} — unverified)`,
+  max20: `Claude Max (20×)   (community est. ${fmt(PLAN_LIMITS.max20)} — unverified)`,
   api:   'API key            (no quota limit)',
 }
 

@@ -31,7 +31,8 @@ export function attributeLabel(content: unknown[]): string {
       return `agent: ${subtype}`
     }
     // fallback: first 30 chars of description (stable-ish for dedup)
-    const desc = String(agentTool.input['description'] ?? 'agent')
+    const descValue = agentTool.input['description']
+    const desc = typeof descValue === 'string' ? descValue : 'agent'
     return `agent: ${desc.slice(0, 30)}${desc.length > 30 ? '…' : ''}`
   }
 

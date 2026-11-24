@@ -14,6 +14,7 @@ import {
   sumOutputTokens,
   sumBillingTokens,
   isFirstRun,
+  PLAN_LIMITS,
 } from '../lib/quota.js'
 import * as path from 'path'
 import * as fs from 'fs'
@@ -200,7 +201,7 @@ export function reportCommand(opts: ReportOptions = {}): void {
   // First-run warning
   if (isFirstRun()) {
     console.log()
-    console.log(`⚠️  No plan configured — defaulting to MAX5 (88k). Quota % may be wrong.`)
+    console.log(`⚠️  No plan configured — defaulting to MAX5 (${PLAN_LIMITS.max5?.toLocaleString()} out-tok/5h). Quota % may be wrong.`)
     console.log(`   Run: claude-token-lens setup`)
     console.log()
   }
